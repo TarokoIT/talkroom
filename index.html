@@ -61,18 +61,6 @@
         .st-on { color: #2ecc71; font-weight: bold; }
         .st-off { color: #e74c3c; }
 
-        /* 控制按鈕區 - 放在 header 右方 */
-        .header-controls { 
-            display: flex; gap: 8px; align-items: center; flex-shrink: 0;
-            border-left: 2px solid #eee; padding-left: 12px;
-        }
-        .control-btn { 
-            width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; 
-            display: flex; align-items: center; justify-content: center; font-size: 18px; transition: 0.2s;
-            background: #f0f2f5; color: #333; flex-shrink: 0;
-        }
-        .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
-
         /* 聊天視窗 */
         #chat-win { 
             flex: 1; 
@@ -124,6 +112,14 @@
         input[type="color"] { border: none; width: 22px; height: 22px; background: none; padding: 0; cursor: pointer; }
         select { border: none; background: transparent; font-size: 13px; outline: none; font-weight: bold; }
 
+        /* 控制按鈕 - 放在工具列中 */
+        .control-btn { 
+            width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; font-size: 18px; transition: 0.2s;
+            background: #f0f2f5; color: #333; flex-shrink: 0;
+        }
+        .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
+
         /* 輸入列 - 確保不被遮擋 */
         .input-row { 
             display: flex; 
@@ -155,7 +151,6 @@
         @media (max-width: 1024px) {
             .header-content { flex-wrap: wrap; }
             .header-left { width: 100%; }
-            .header-controls { width: 100%; border-left: none; border-top: 2px solid #eee; padding-left: 0; padding-top: 10px; margin-top: 10px; }
         }
 
         /* 手機版優化 (768px 以下) */
@@ -178,7 +173,6 @@
             #send-btn { width: 54px; }
             #msg-in { height: 44px; font-size: 15px; padding: 0 12px; }
             
-            .header-controls { gap: 6px; padding-left: 0; padding-top: 8px; margin-top: 8px; }
             .control-btn { width: 36px; height: 36px; font-size: 16px; }
         }
 
@@ -203,7 +197,6 @@
             #send-btn { width: 48px; }
             #msg-in { height: 40px; font-size: 14px; padding: 0 10px; }
             
-            .header-controls { gap: 5px; padding-left: 0; padding-top: 6px; margin-top: 6px; }
             .control-btn { width: 34px; height: 34px; font-size: 14px; }
         }
 
@@ -246,10 +239,6 @@
             <div class="header-title">🟢 線上人員 (狀態即時更新)</div>
             <div id="user-list" class="user-list"></div>
         </div>
-        <div class="header-controls">
-            <button id="spk-btn" class="control-btn" onclick="toggleSpk()" title="切換喇叭">🔊</button>
-            <button id="mic-btn" class="control-btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
-        </div>
     </div>
 </div>
 
@@ -271,6 +260,8 @@
                 <option value="22px">大</option>
             </select>
         </div>
+        <button id="spk-btn" class="control-btn" onclick="toggleSpk()" title="切換喇叭">🔊</button>
+        <button id="mic-btn" class="control-btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
     </div>
     <div class="input-row">
         <input type="text" id="msg-in" placeholder="想說點什麼..." onkeypress="if(event.key==='Enter') sendMsg()">
@@ -292,6 +283,7 @@
     let isMic = false, isSpk = true;
     let audioCtx = null;
     let activeCalls = new Map(); // 追蹤活躍的通話連接
+    let stateUpdateTimer = null; // 定期同步狀態的計時器
 
     async function initApp() {
         const btn = document.getElementById('login-btn');
@@ -336,6 +328,11 @@
                 log.innerText = "連線成功！";
                 setupRealtime();
                 document.getElementById('login-screen').style.display = 'none';
+                
+                // 設定定期狀態同步 (每 2 秒)
+                stateUpdateTimer = setInterval(() => {
+                    syncMyState();
+                }, 2000);
             });
 
             peer.on('call', (call) => {
@@ -379,7 +376,9 @@
         
         presenceChannel
             .on('presence', { event: 'sync' }, () => {
-                renderUserList(presenceChannel.presenceState());
+                const state = presenceChannel.presenceState();
+                renderUserList(state);
+                
                 // 當有新人上線時，嘗試建立通話連接
                 if (isMic) {
                     initiateCalls();
@@ -395,6 +394,19 @@
                     });
                 }
             })
+            .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+                // 使用者離開時自動更新名單
+                const state = presenceChannel.presenceState();
+                renderUserList(state);
+                
+                // 關閉與離線使用者的通話
+                leftPresences.forEach(presence => {
+                    if (activeCalls.has(presence.peerId)) {
+                        activeCalls.get(presence.peerId).close();
+                        activeCalls.delete(presence.peerId);
+                    }
+                });
+            })
             .subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
                     await syncMyState();
@@ -407,27 +419,40 @@
     // 更新並同步我的狀態給所有人
     async function syncMyState() {
         if(presenceChannel) {
-            await presenceChannel.track({
-                peerId: myPeerId,
-                mic: isMic,
-                spk: isSpk,
-                lastUpdate: Date.now()
-            });
+            try {
+                await presenceChannel.track({
+                    peerId: myPeerId,
+                    mic: isMic,
+                    spk: isSpk,
+                    lastUpdate: Date.now()
+                });
+            } catch (e) {
+                console.error('狀態同步失敗:', e);
+            }
         }
     }
 
     function renderUserList(state) {
         const list = document.getElementById('user-list');
         list.innerHTML = "";
+        
         Object.keys(state).forEach(name => {
-            const u = state[name][0];
+            const presences = state[name];
+            if (!presences || presences.length === 0) return;
+            
+            const u = presences[0]; // 取得該使用者的最新狀態
             const div = document.createElement('div');
             div.className = 'u-tag';
+            
+            // 確保狀態值為布林值
+            const micStatus = u.mic === true || u.mic === 'true';
+            const spkStatus = u.spk === true || u.spk === 'true';
+            
             div.innerHTML = `
                 <span class="u-name-label">${name} ${name === myName ? '(我)' : ''}</span>
                 <div class="u-status-label">
-                    <span class="${u.mic ? 'st-on' : 'st-off'}">麥:${u.mic ? '開' : '關'}</span>
-                    <span class="${u.spk ? 'st-on' : 'st-off'}">喇:${u.spk ? '開' : '關'}</span>
+                    <span class="${micStatus ? 'st-on' : 'st-off'}">麥:${micStatus ? '開' : '關'}</span>
+                    <span class="${spkStatus ? 'st-on' : 'st-off'}">喇:${spkStatus ? '開' : '關'}</span>
                 </div>
             `;
             list.appendChild(div);
@@ -569,6 +594,34 @@
         const inputField = document.getElementById('msg-in');
         if (inputField && document.activeElement === inputField) {
             inputField.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+
+    // 視窗關閉時清理
+    window.addEventListener('beforeunload', () => {
+        if (presenceChannel) {
+            presenceChannel.unsubscribe();
+        }
+        if (stateUpdateTimer) {
+            clearInterval(stateUpdateTimer);
+        }
+        activeCalls.forEach(call => call.close());
+        activeCalls.clear();
+    });
+
+    // 頁面隱藏時清理
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (stateUpdateTimer) {
+                clearInterval(stateUpdateTimer);
+                stateUpdateTimer = null;
+            }
+        } else {
+            if (!stateUpdateTimer) {
+                stateUpdateTimer = setInterval(() => {
+                    syncMyState();
+                }, 2000);
+            }
         }
     });
 </script>
