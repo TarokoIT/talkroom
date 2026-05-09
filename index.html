@@ -600,7 +600,9 @@
     // 刪除所有對話紀錄的函數
     async function deleteAllMessages() {
         try {
-            const { error } = await client.from('chat_messages').delete().neq('id', 0);
+            // 使用 .not('id', 'is', null) 來刪除所有記錄
+            // 這個方法相容於 UUID 與數字類型的 ID
+            const { error } = await client.from('chat_messages').delete().not('id', 'is', null);
             if (error) {
                 console.error('刪除失敗:', error);
                 alert("刪除失敗：" + error.message);
