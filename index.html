@@ -502,7 +502,11 @@
             .subscribe();
 
         // B. Presence 狀態監聽
-        presenceChannel = client.channel('online_users', { config: { presence: { key: myName } } });
+        presenceChannel = client.channel('online_users', { 
+    config: { 
+        presence: { key: myPeerId } 
+    } 
+});
         
         presenceChannel
             .on('presence', { event: 'sync' }, () => {
@@ -554,45 +558,67 @@
     }
 
     async function syncMyState() {
-        if(presenceChannel) {
-            try {
-                await presenceChannel.track({
-                    peerId: myPeerId,
-                    mic: isMic,
-                    spk: isSpk,
-                    lastUpdate: Date.now()
-                });
-            } catch (e) {
-                console.error('狀態同步失敗:', e);
-            }
-        }
+    if (!presenceChannel) return;
+
+    try {
+        await presenceChannel.track({
+            username: myName,
+            peerId: myPeerId,
+            mic: isMic,
+            spk: isSpk,
+            lastUpdate: Date.now()
+        });
+
+        console.log('已同步狀態');
+    } catch (e) {
+        console.error('狀態同步失敗:', e);
     }
+}
 
     function renderUserList(state) {
-        const list = document.getElementById('user-list');
-        list.innerHTML = "";
-        
-        Object.keys(state).forEach(name => {
-            const presences = state[name];
-            if (!presences || presences.length === 0) return;
-            
-            const u = presences[0];
-            const div = document.createElement('div');
-            div.className = 'u-tag';
-            
-            const micStatus = u.mic === true || u.mic === 'true';
-            const spkStatus = u.spk === true || u.spk === 'true';
-            
-            div.innerHTML = `
-                <span class="u-name-label">${name} ${name === myName ? '(我)' : ''}</span>
-                <div class="u-status-label">
-                    <span class="${micStatus ? 'st-on' : 'st-off'}">麥:${micStatus ? '開' : '關'}</span>
-                    <span class="${spkStatus ? 'st-on' : 'st-off'}">喇:${spkStatus ? '開' : '關'}</span>
-                </div>
-            `;
-            list.appendChild(div);
-        });
-    }
+
+    const list = document.getElementById('user-list');
+
+    list.innerHTML = "";
+
+    Object.entries(state).forEach(([key, presences]) => {
+
+        if (!presences || presences.length === 0) return;
+
+        const u = presences[0];
+
+        const username = u.username || "未知";
+
+        const div = document.createElement('div');
+
+        div.className = 'u-tag';
+
+        const micStatus = u.mic === true || u.mic === 'true';
+
+        const spkStatus = u.spk === true || u.spk === 'true';
+
+        div.innerHTML = `
+            <span class="u-name-label">
+                ${username}
+                ${username === myName ? '(我)' : ''}
+            </span>
+
+            <div class="u-status-label">
+                <span class="${micStatus ? 'st-on' : 'st-off'}">
+                    麥:${micStatus ? '開' : '關'}
+                </span>
+
+                <span class="${spkStatus ? 'st-on' : 'st-off'}">
+                    喇:${spkStatus ? '開' : '關'}
+                </span>
+            </div>
+        `;
+
+        list.appendChild(div);
+
+    });
+
+}
 
     async function sendMsg() {
         try {
@@ -853,9 +879,16 @@ async function exitApp() {
         if (presenceChannel) {
             try {
                 // 發送最後的離線狀態
-                await presenceChannel.track({ peerId: myPeerId, mic: false, spk: false, lastUpdate: Date.now() });
-                // 強制等待 300 毫秒，確保封包在手機網路上送達
-                await new Promise(resolve => setTimeout(resolve, 300)); 
+                // 強制等待 1000 毫秒，確保封包在手機網路上送達
+                await presenceChannel.untrack();
+
+console.log('已取消 Presence');
+
+await new Promise(resolve => setTimeout(resolve, 1000));
+
+await presenceChannel.unsubscribe();
+
+console.log('已取消訂閱'); 
                 
                 // 正式取消追蹤
                 await presenceChannel.untrack();
@@ -888,40 +921,52 @@ async function exitApp() {
     });
 
     // 視窗關閉時清理（Android 關鍵）
-    window.addEventListener('beforeunload', (e) => {
-        if (!isExiting && myName && presenceChannel) {
-            // 同步方式立即取消追蹤
-            try {
-                presenceChannel.untrack();
-                console.log('beforeunload: 已取消 Presence 追蹤');
-            } catch (err) {
-                console.error('beforeunload 中取消追蹤失敗:', err);
-            }
+    window.addEventListener('beforeunload', () => {
+
+    try {
+
+        if (presenceChannel) {
+
+            presenceChannel.unsubscribe();
+
         }
-    });
+
+        if (peer) {
+
+            peer.destroy();
+
+        }
+
+    } catch(e) {
+
+        console.error(e);
+
+    }
+
+});
 
     // 頁面隱藏時清理（Android 關鍵）
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            // 頁面隱藏時暫停音訊
-            document.querySelectorAll('audio').forEach(a => a.pause());
-            
-            // 如果尚未退出，嘗試主動取消追蹤
-            if (!isExiting && presenceChannel && myName) {
-                try {
-                    presenceChannel.untrack();
-                    console.log('visibilitychange: 已取消 Presence 追蹤');
-                } catch (e) {
-                    console.error('頁面隱藏時取消追蹤失敗:', e);
-                }
+
+    if (document.hidden) {
+
+        document.querySelectorAll('audio').forEach(a => a.pause());
+
+    } else {
+
+        document.querySelectorAll('audio').forEach(a => {
+
+            if (!a.muted) {
+
+                a.play().catch(() => {});
+
             }
-        } else {
-            // 頁面恢復時恢復音訊
-            document.querySelectorAll('audio').forEach(a => {
-                if (!a.muted) a.play().catch(e => console.error('音訊恢復失敗:', e));
-            });
-        }
-    });
+
+        });
+
+    }
+
+});
     
     // Android 特殊處理：監聽 pagehide 事件（比 beforeunload 更可靠）
     window.addEventListener('pagehide', (e) => {
