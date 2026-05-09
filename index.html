@@ -528,9 +528,27 @@
             }
 
             renderOnlineUsers(data || []);
+            
+            // 如果麥克風開啟，自動發起通話
+            if (isMic && data && data.length > 0) {
+                initiateCallsFromList(data);
+            }
         } catch(e) {
             console.error('加載在線使用者異常:', e);
         }
+    }
+    
+    // 根據在線使用者清單發起通話
+    function initiateCallsFromList(userList) {
+        userList.forEach(user => {
+            // 不要與自己通話
+            if (user.peer_id === myPeerId) return;
+            
+            // 如果還沒有與此使用者的通話，則發起
+            if (!activeCalls.has(user.peer_id)) {
+                makeCall(user.peer_id);
+            }
+        });
     }
 
     // 渲染在線使用者清單
@@ -673,39 +691,58 @@
             return;
         }
         
-        console.log('主動發起通話:', peerId);
-        const call = peer.call(peerId, myStream);
-        activeCalls.set(peerId, call);
+        if (!myStream) {
+            console.error('麥克風沒有準備好，無法發起通話');
+            return;
+        }
         
-        call.on('stream', (remoteStream) => {
-            console.log('發起通話後收到遠端音訊:', peerId);
-            handleRemoteStream(peerId, remoteStream);
-        });
-        
-        call.on('close', () => {
-            console.log('主動發起的通話結束:', peerId);
+        try {
+            console.log('主動發起通話:', peerId);
+            const call = peer.call(peerId, myStream);
+            activeCalls.set(peerId, call);
+            
+            call.on('stream', (remoteStream) => {
+                console.log('發起通話後收到遠端音訊:', peerId);
+                handleRemoteStream(peerId, remoteStream);
+            });
+            
+            call.on('close', () => {
+                console.log('主動發起的通話結束:', peerId);
+                activeCalls.delete(peerId);
+                remoteStreams.delete(peerId);
+                
+                // 移除音訊元素
+                const aud = document.getElementById('aud-' + peerId);
+                if (aud) aud.remove();
+            });
+            
+            call.on('error', (err) => {
+                console.error('主動發起通話錯誤:', err);
+                activeCalls.delete(peerId);
+            });
+        } catch (e) {
+            console.error('發起通話異常:', e);
             activeCalls.delete(peerId);
-            remoteStreams.delete(peerId);
-        });
-        
-        call.on('error', (err) => {
-            console.error('主動發起通話錯誤:', err);
-            activeCalls.delete(peerId);
-        });
+        }
     }
 
     function initiateCalls() {
-        // 從 users_online 表中取得所有在線使用者
-        const list = document.getElementById('user-list');
-        const userElements = list.querySelectorAll('.u-tag');
-        
-        userElements.forEach(elem => {
-            const username = elem.querySelector('.u-name-label').textContent.replace('(我)', '').trim();
-            if (username !== myName) {
-                // 這裡需要從資料庫中取得 peer_id
-                // 簡化版本：直接從現有的通話列表中發起
+        // 立即從資料庫查詢所有在線使用者並發起通話
+        (async () => {
+            try {
+                const limitTime = new Date(Date.now() - 10000).toISOString();
+                const { data } = await client
+                    .from('users_online')
+                    .select('*')
+                    .gt('last_seen', limitTime);
+                
+                if (data && data.length > 0) {
+                    initiateCallsFromList(data);
+                }
+            } catch (e) {
+                console.error('initiateCalls 查詢失敗:', e);
             }
-        });
+        })();
     }
 
     function toggleMic() {
