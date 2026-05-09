@@ -25,6 +25,8 @@
 
         /* 頂部人員名單 (優化手機閱讀) */
         .header { background: #fff; padding: 10px 15px; border-bottom: 1px solid #ddd; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .header-content { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+        .header-left { flex: 1; min-width: 0; }
         .header-title { font-size: 12px; color: #888; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
         .user-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
         .user-list::-webkit-scrollbar { display: none; }
@@ -38,6 +40,18 @@
         .st-on { color: #2ecc71; font-weight: bold; }
         .st-off { color: #e74c3c; }
 
+        /* 控制按鈕區 - 放在 header 右方 */
+        .header-controls { 
+            display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+            border-left: 2px solid #eee; padding-left: 12px;
+        }
+        .control-btn { 
+            width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; font-size: 18px; transition: 0.2s;
+            background: #f0f2f5; color: #333; flex-shrink: 0;
+        }
+        .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
+
         /* 聊天視窗 (手機版優化) */
         #chat-win { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; background: #eef1f4; }
         .msg { max-width: 88%; padding: 10px 14px; border-radius: 18px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); line-height: 1.5; }
@@ -49,8 +63,9 @@
         .footer { background: #fff; padding: 12px; border-top: 1px solid #eee; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
         
         /* 工具列：顏色與大小 */
-        .tools-row { display: flex; gap: 15px; margin-bottom: 12px; align-items: center; font-size: 13px; }
-        .tool-group { display: flex; align-items: center; gap: 5px; background: #f8f9fa; padding: 4px 10px; border-radius: 10px; }
+        .tools-row { display: flex; gap: 15px; margin-bottom: 12px; align-items: center; font-size: 13px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+        .tools-row::-webkit-scrollbar { display: none; }
+        .tool-group { display: flex; align-items: center; gap: 5px; background: #f8f9fa; padding: 4px 10px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
         input[type="color"] { border: none; width: 22px; height: 22px; background: none; padding: 0; cursor: pointer; }
         select { border: none; background: transparent; font-size: 13px; outline: none; font-weight: bold; }
 
@@ -59,19 +74,56 @@
         .btn { 
             width: 48px; height: 48px; border-radius: 15px; border: none; cursor: pointer; 
             display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s;
-            background: #f0f2f5; color: #333;
+            background: #f0f2f5; color: #333; flex-shrink: 0;
         }
-        #mic-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
         #send-btn { background: var(--main); color: white; width: 60px; }
         #msg-in { 
             flex: 1; height: 48px; padding: 0 15px; border-radius: 15px; border: 1px solid #ddd; 
-            font-size: 16px; outline: none; background: #f8f9fa;
+            font-size: 16px; outline: none; background: #f8f9fa; min-width: 0;
         }
 
-        @media (max-width: 480px) {
+        /* 手機版優化 */
+        @media (max-width: 768px) {
+            .header-content { flex-wrap: wrap; }
+            .header-left { width: 100%; }
+            .header-controls { width: 100%; border-left: none; border-top: 2px solid #eee; padding-left: 0; padding-top: 10px; margin-top: 10px; }
+            
             .msg { max-width: 92%; font-size: 15px; }
             .btn { width: 44px; height: 44px; }
             #msg-in { height: 44px; }
+            
+            .tools-row { flex-wrap: wrap; gap: 8px; }
+            .tool-group { padding: 3px 8px; font-size: 12px; }
+        }
+
+        @media (max-width: 480px) {
+            .header { padding: 8px 12px; }
+            .header-title { font-size: 11px; margin-bottom: 6px; }
+            .u-tag { padding: 5px 10px; font-size: 12px; }
+            .u-status-label { font-size: 9px; }
+            
+            .msg { max-width: 92%; font-size: 14px; padding: 8px 12px; }
+            .u-name { font-size: 10px; }
+            
+            .footer { padding: 10px; }
+            .tools-row { gap: 6px; margin-bottom: 10px; }
+            .tool-group { padding: 3px 8px; font-size: 11px; gap: 3px; }
+            
+            .btn { width: 40px; height: 40px; font-size: 18px; }
+            #send-btn { width: 50px; }
+            #msg-in { height: 40px; font-size: 15px; padding: 0 12px; }
+            
+            .header-controls { gap: 6px; padding-left: 0; padding-top: 8px; margin-top: 8px; }
+            .control-btn { width: 36px; height: 36px; font-size: 16px; }
+        }
+
+        /* 超小螢幕 (< 360px) */
+        @media (max-width: 360px) {
+            .tools-row { gap: 4px; }
+            .tool-group { padding: 2px 6px; font-size: 10px; }
+            .btn { width: 38px; height: 38px; font-size: 16px; }
+            #send-btn { width: 45px; }
+            #msg-in { height: 38px; font-size: 14px; }
         }
     </style>
 </head>
@@ -88,8 +140,16 @@
 </div>
 
 <div class="header">
-    <div class="header-title">🟢 線上人員 (狀態即時更新)</div>
-    <div id="user-list" class="user-list"></div>
+    <div class="header-content">
+        <div class="header-left">
+            <div class="header-title">🟢 線上人員 (狀態即時更新)</div>
+            <div id="user-list" class="user-list"></div>
+        </div>
+        <div class="header-controls">
+            <button id="spk-btn" class="control-btn" onclick="toggleSpk()" title="切換喇叭">🔊</button>
+            <button id="mic-btn" class="control-btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
+        </div>
+    </div>
 </div>
 
 <div id="chat-win"></div>
@@ -112,8 +172,6 @@
         </div>
     </div>
     <div class="input-row">
-        <button id="spk-btn" class="btn" onclick="toggleSpk()" title="切換喇叭">🔊</button>
-        <button id="mic-btn" class="btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
         <input type="text" id="msg-in" placeholder="想說點什麼..." onkeypress="if(event.key==='Enter') sendMsg()">
         <button id="send-btn" class="btn" onclick="sendMsg()">傳送</button>
     </div>
@@ -259,7 +317,7 @@
     function toggleMic() {
         isMic = !isMic;
         myStream.getAudioTracks()[0].enabled = isMic;
-        document.getElementById('mic-btn').className = isMic ? "btn on" : "btn";
+        document.getElementById('mic-btn').className = isMic ? "control-btn on" : "control-btn";
         syncMyState(); // 立即同步狀態到名單
 
         if(isMic) {
