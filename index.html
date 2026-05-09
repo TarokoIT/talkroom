@@ -379,11 +379,37 @@
     let remoteStreams = new Map();
     let isExiting = false;
 
-    // 獲取台灣時間的函數
+    // 獲取台灣時間的函數（穩定版本）
     function getTaiwanTime() {
-        const now = new Date();
-        const taiwanTime = new Date(now.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }));
-        return taiwanTime.toISOString();
+        try {
+            // 方法：使用 UTC 時間 + 8 小時偏移
+            const now = new Date();
+            // 建立一個台灣時區的格式化字串
+            const formatter = new Intl.DateTimeFormat('zh-TW', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+                timeZone: 'Asia/Taipei'
+            });
+            
+            const parts = formatter.formatToParts(now);
+            const dateObj = {};
+            parts.forEach(part => {
+                dateObj[part.type] = part.value;
+            });
+            
+            // 組合成 ISO 格式字串
+            const isoString = `${dateObj.year}-${dateObj.month}-${dateObj.day}T${dateObj.hour}:${dateObj.minute}:${dateObj.second}+08:00`;
+            return isoString;
+        } catch (e) {
+            console.error('getTaiwanTime 錯誤:', e);
+            // 備用方案：直接使用 UTC 時間
+            return new Date().toISOString();
+        }
     }
 
     async function initApp() {
