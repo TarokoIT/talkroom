@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <style>
-        :root { --main: #3ecf8e; --dark: #1e1e1e; --bg: #f5f7f9; }
+        :root { --main: #3ecf8e; --dark: #1e1e1e; --bg: #f5f7f9; --danger: #ff4757; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         html, body { 
@@ -112,6 +112,30 @@
         input[type="color"] { border: none; width: 22px; height: 22px; background: none; padding: 0; cursor: pointer; }
         select { border: none; background: transparent; font-size: 13px; outline: none; font-weight: bold; }
 
+        /* 退出按鈕 */
+        #exit-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+            transition: 0.2s;
+        }
+        
+        #exit-btn:hover {
+            background: #ff3838;
+            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3);
+        }
+        
+        #exit-btn:active {
+            transform: scale(0.95);
+        }
+
         /* 輸入列 - 麥克風 喇叭 輸入框 傳送 */
         .input-row { 
             display: flex; 
@@ -164,6 +188,8 @@
             .tools-row { gap: 8px; margin-bottom: 8px; }
             .tool-group { padding: 3px 8px; font-size: 11px; gap: 3px; }
             
+            #exit-btn { padding: 5px 12px; font-size: 12px; }
+            
             .control-btn { width: 44px; height: 44px; font-size: 18px; }
             .btn { width: 44px; height: 44px; font-size: 18px; }
             #send-btn { width: 54px; }
@@ -187,6 +213,8 @@
             .tools-row { gap: 6px; margin-bottom: 6px; }
             .tool-group { padding: 2px 6px; font-size: 10px; gap: 2px; }
             
+            #exit-btn { padding: 4px 10px; font-size: 11px; }
+            
             .control-btn { width: 40px; height: 40px; font-size: 16px; }
             .btn { width: 40px; height: 40px; font-size: 16px; }
             #send-btn { width: 48px; }
@@ -205,6 +233,8 @@
             .footer { padding: 6px; }
             .tools-row { gap: 4px; margin-bottom: 4px; }
             .tool-group { padding: 2px 5px; font-size: 9px; }
+            
+            #exit-btn { padding: 3px 8px; font-size: 10px; }
             
             .control-btn { width: 36px; height: 36px; font-size: 14px; }
             .btn { width: 36px; height: 36px; font-size: 14px; }
@@ -252,6 +282,7 @@
                 <option value="22px">大</option>
             </select>
         </div>
+        <button id="exit-btn" onclick="exitApp()">退出</button>
     </div>
     <div class="input-row">
         <button id="mic-btn" class="control-btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
@@ -275,7 +306,8 @@
     let isMic = false, isSpk = true;
     let audioCtx = null;
     let activeCalls = new Map();
-    let remoteStreams = new Map(); // 追蹤遠端音訊流
+    let remoteStreams = new Map();
+    let isExiting = false; // 防止重複退出
 
     async function initApp() {
         const btn = document.getElementById('login-btn');
@@ -591,7 +623,7 @@
                 const o = audioCtx.createOscillator(), g = audioCtx.createGain();
                 o.connect(g); g.connect(audioCtx.destination);
                 o.frequency.setValueAtTime(freq, audioCtx.currentTime + offset);
-                g.gain.setValueAtTime(0.2, audioCtx.currentTime + offset);
+                g.gain.setValueAtValue(0.2, audioCtx.currentTime + offset);
                 g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + offset + 0.1);
                 o.start(audioCtx.currentTime + offset); 
                 o.stop(audioCtx.currentTime + offset + 0.1);
@@ -623,6 +655,50 @@
         }
     }
 
+    // 退出應用程式
+    async function exitApp() {
+        if (isExiting) return; // 防止重複退出
+        isExiting = true;
+
+        try {
+            // 記錄退出時間
+            await logUserEvent('logout', myName);
+            
+            // 等待日誌記錄完成
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 清理資源
+            if (presenceChannel) {
+                await presenceChannel.unsubscribe();
+            }
+            
+            // 關閉所有通話
+            activeCalls.forEach(call => call.close());
+            activeCalls.clear();
+            remoteStreams.clear();
+            
+            // 停止麥克風
+            if (myStream) {
+                myStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // 關閉 Peer 連接
+            if (peer) {
+                peer.destroy();
+            }
+            
+            // 關閉視窗
+            setTimeout(() => {
+                window.close();
+            }, 300);
+            
+        } catch (e) {
+            console.error('退出過程中發生錯誤:', e);
+            // 即使出錯也強制關閉
+            window.close();
+        }
+    }
+
     // 防止頁面被虛擬鍵盤遮擋
     window.addEventListener('resize', () => {
         const inputField = document.getElementById('msg-in');
@@ -632,13 +708,11 @@
     });
 
     // 視窗關閉時清理
-    window.addEventListener('beforeunload', () => {
-        if (presenceChannel) {
-            presenceChannel.unsubscribe();
+    window.addEventListener('beforeunload', async (e) => {
+        if (!isExiting && myName) {
+            // 如果不是透過退出按鈕關閉，也要記錄登出
+            await logUserEvent('logout', myName);
         }
-        activeCalls.forEach(call => call.close());
-        activeCalls.clear();
-        remoteStreams.clear();
     });
 
     // 頁面隱藏時清理
