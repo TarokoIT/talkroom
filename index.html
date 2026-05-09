@@ -78,7 +78,7 @@
         .msg.other { align-self: flex-start; border-bottom-left-radius: 4px; }
         .u-name { font-size: 11px; font-weight: 700; display: block; margin-bottom: 4px; opacity: 0.7; }
 
-        /* 底部控制區 - 固定定位 */
+        /* 底部控制區 */
         .footer { 
             background: #fff; 
             padding: 12px; 
@@ -112,27 +112,28 @@
         input[type="color"] { border: none; width: 22px; height: 22px; background: none; padding: 0; cursor: pointer; }
         select { border: none; background: transparent; font-size: 13px; outline: none; font-weight: bold; }
 
-        /* 控制按鈕 - 放在工具列中 */
-        .control-btn { 
-            width: 40px; height: 40px; border-radius: 12px; border: none; cursor: pointer; 
-            display: flex; align-items: center; justify-content: center; font-size: 18px; transition: 0.2s;
-            background: #f0f2f5; color: #333; flex-shrink: 0;
-        }
-        .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
-
-        /* 輸入列 - 確保不被遮擋 */
+        /* 輸入列 - 麥克風 喇叭 輸入框 傳送 */
         .input-row { 
             display: flex; 
             gap: 8px; 
             align-items: center;
             width: 100%;
         }
+        
+        .control-btn { 
+            width: 48px; height: 48px; border-radius: 15px; border: none; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s;
+            background: #f0f2f5; color: #333; flex-shrink: 0;
+        }
+        .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
+        
         .btn { 
             width: 48px; height: 48px; border-radius: 15px; border: none; cursor: pointer; 
             display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s;
             background: #f0f2f5; color: #333; flex-shrink: 0;
         }
         #send-btn { background: var(--main); color: white; width: 60px; }
+        
         #msg-in { 
             flex: 1; 
             height: 48px; 
@@ -145,12 +146,6 @@
             min-width: 0;
             -webkit-appearance: none;
             appearance: none;
-        }
-
-        /* 平板版本 */
-        @media (max-width: 1024px) {
-            .header-content { flex-wrap: wrap; }
-            .header-left { width: 100%; }
         }
 
         /* 手機版優化 (768px 以下) */
@@ -169,11 +164,10 @@
             .tools-row { gap: 8px; margin-bottom: 8px; }
             .tool-group { padding: 3px 8px; font-size: 11px; gap: 3px; }
             
+            .control-btn { width: 44px; height: 44px; font-size: 18px; }
             .btn { width: 44px; height: 44px; font-size: 18px; }
             #send-btn { width: 54px; }
             #msg-in { height: 44px; font-size: 15px; padding: 0 12px; }
-            
-            .control-btn { width: 36px; height: 36px; font-size: 16px; }
         }
 
         /* 小手機 (480px 以下) */
@@ -193,11 +187,10 @@
             .tools-row { gap: 6px; margin-bottom: 6px; }
             .tool-group { padding: 2px 6px; font-size: 10px; gap: 2px; }
             
+            .control-btn { width: 40px; height: 40px; font-size: 16px; }
             .btn { width: 40px; height: 40px; font-size: 16px; }
             #send-btn { width: 48px; }
             #msg-in { height: 40px; font-size: 14px; padding: 0 10px; }
-            
-            .control-btn { width: 34px; height: 34px; font-size: 14px; }
         }
 
         /* 超小螢幕 (< 360px) */
@@ -213,11 +206,10 @@
             .tools-row { gap: 4px; margin-bottom: 4px; }
             .tool-group { padding: 2px 5px; font-size: 9px; }
             
+            .control-btn { width: 36px; height: 36px; font-size: 14px; }
             .btn { width: 36px; height: 36px; font-size: 14px; }
             #send-btn { width: 44px; }
             #msg-in { height: 36px; font-size: 13px; padding: 0 8px; }
-            
-            .control-btn { width: 32px; height: 32px; font-size: 12px; }
         }
     </style>
 </head>
@@ -260,10 +252,10 @@
                 <option value="22px">大</option>
             </select>
         </div>
-        <button id="spk-btn" class="control-btn" onclick="toggleSpk()" title="切換喇叭">🔊</button>
-        <button id="mic-btn" class="control-btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
     </div>
     <div class="input-row">
+        <button id="mic-btn" class="control-btn" onclick="toggleMic()" title="切換麥克風">🎤</button>
+        <button id="spk-btn" class="control-btn" onclick="toggleSpk()" title="切換喇叭">🔊</button>
         <input type="text" id="msg-in" placeholder="想說點什麼..." onkeypress="if(event.key==='Enter') sendMsg()">
         <button id="send-btn" class="btn" onclick="sendMsg()">傳送</button>
     </div>
@@ -282,8 +274,8 @@
     let myName = "", myPeerId = "", peer = null, myStream = null, presenceChannel = null;
     let isMic = false, isSpk = true;
     let audioCtx = null;
-    let activeCalls = new Map(); // 追蹤活躍的通話連接
-    let stateUpdateTimer = null; // 定期同步狀態的計時器
+    let activeCalls = new Map();
+    let remoteStreams = new Map(); // 追蹤遠端音訊流
 
     async function initApp() {
         const btn = document.getElementById('login-btn');
@@ -309,7 +301,6 @@
                 } 
             });
             
-            // 初始化時麥克風關閉
             myStream.getAudioTracks()[0].enabled = false;
 
             // 初始化 PeerJS
@@ -329,29 +320,33 @@
                 setupRealtime();
                 document.getElementById('login-screen').style.display = 'none';
                 
-                // 設定定期狀態同步 (每 2 秒)
-                stateUpdateTimer = setInterval(() => {
-                    syncMyState();
-                }, 2000);
+                // 記錄登入
+                logUserEvent('login', myName);
             });
 
             peer.on('call', (call) => {
-                // 接收來電
+                console.log('收到來電:', call.peer);
                 call.answer(myStream);
                 activeCalls.set(call.peer, call);
                 
                 call.on('stream', (remoteStream) => {
+                    console.log('收到遠端音訊:', call.peer);
                     handleRemoteStream(call.peer, remoteStream);
                 });
                 
                 call.on('close', () => {
+                    console.log('通話結束:', call.peer);
                     activeCalls.delete(call.peer);
+                    remoteStreams.delete(call.peer);
+                });
+
+                call.on('error', (err) => {
+                    console.error('接收通話錯誤:', err);
                 });
             });
 
             peer.on('error', (err) => {
                 console.error('PeerJS 錯誤:', err);
-                log.innerText = "連線錯誤：" + err.type;
             });
 
         } catch (e) {
@@ -378,24 +373,23 @@
             .on('presence', { event: 'sync' }, () => {
                 const state = presenceChannel.presenceState();
                 renderUserList(state);
-                
-                // 當有新人上線時，嘗試建立通話連接
-                if (isMic) {
-                    initiateCalls();
-                }
             })
             .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-                // 新使用者加入時
+                console.log('新使用者加入:', key);
+                const state = presenceChannel.presenceState();
+                renderUserList(state);
+                
+                // 新使用者加入時，如果我的麥克風開啟，主動發起通話
                 if (isMic) {
                     newPresences.forEach(presence => {
                         if (presence.peerId && presence.peerId !== myPeerId) {
-                            makeCall(presence.peerId);
+                            setTimeout(() => makeCall(presence.peerId), 500);
                         }
                     });
                 }
             })
             .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-                // 使用者離開時自動更新名單
+                console.log('使用者離開:', key);
                 const state = presenceChannel.presenceState();
                 renderUserList(state);
                 
@@ -405,7 +399,15 @@
                         activeCalls.get(presence.peerId).close();
                         activeCalls.delete(presence.peerId);
                     }
+                    remoteStreams.delete(presence.peerId);
+                    
+                    // 移除音訊元素
+                    const aud = document.getElementById('aud-' + presence.peerId);
+                    if (aud) aud.remove();
                 });
+                
+                // 記錄登出
+                logUserEvent('logout', key);
             })
             .subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
@@ -416,7 +418,6 @@
         loadHistory();
     }
 
-    // 更新並同步我的狀態給所有人
     async function syncMyState() {
         if(presenceChannel) {
             try {
@@ -440,11 +441,10 @@
             const presences = state[name];
             if (!presences || presences.length === 0) return;
             
-            const u = presences[0]; // 取得該使用者的最新狀態
+            const u = presences[0];
             const div = document.createElement('div');
             div.className = 'u-tag';
             
-            // 確保狀態值為布林值
             const micStatus = u.mic === true || u.mic === 'true';
             const spkStatus = u.spk === true || u.spk === 'true';
             
@@ -495,33 +495,38 @@
         if(data) data.forEach(renderMsg);
     }
 
-    // 主動發起通話
     function makeCall(peerId) {
-        if (activeCalls.has(peerId)) return; // 已有通話連接
+        if (activeCalls.has(peerId)) {
+            console.log('已有與', peerId, '的通話');
+            return;
+        }
         
+        console.log('主動發起通話:', peerId);
         const call = peer.call(peerId, myStream);
         activeCalls.set(peerId, call);
         
         call.on('stream', (remoteStream) => {
+            console.log('發起通話後收到遠端音訊:', peerId);
             handleRemoteStream(peerId, remoteStream);
         });
         
         call.on('close', () => {
+            console.log('主動發起的通話結束:', peerId);
             activeCalls.delete(peerId);
+            remoteStreams.delete(peerId);
         });
         
         call.on('error', (err) => {
-            console.error('通話錯誤:', err);
+            console.error('主動發起通話錯誤:', err);
             activeCalls.delete(peerId);
         });
     }
 
-    // 向所有線上使用者發起通話
     function initiateCalls() {
         const state = presenceChannel.presenceState();
         Object.values(state).forEach(presences => {
             presences.forEach(u => {
-                if(u.peerId && u.peerId !== myPeerId) {
+                if(u.peerId && u.peerId !== myPeerId && !activeCalls.has(u.peerId)) {
                     makeCall(u.peerId);
                 }
             });
@@ -533,14 +538,18 @@
         myStream.getAudioTracks()[0].enabled = isMic;
         document.getElementById('mic-btn').className = isMic ? "control-btn on" : "control-btn";
         syncMyState();
+        
+        // 記錄麥克風切換
+        logUserEvent(isMic ? 'mic_on' : 'mic_off', myName);
 
         if(isMic) {
-            // 麥克風開啟時，向所有線上使用者發起通話
-            setTimeout(() => initiateCalls(), 500);
+            console.log('麥克風開啟，發起通話');
+            setTimeout(() => initiateCalls(), 300);
         } else {
-            // 麥克風關閉時，關閉所有通話
+            console.log('麥克風關閉，結束所有通話');
             activeCalls.forEach(call => call.close());
             activeCalls.clear();
+            remoteStreams.clear();
         }
     }
 
@@ -549,15 +558,21 @@
         document.getElementById('spk-btn').innerText = isSpk ? "🔊" : "🔇";
         document.querySelectorAll('audio').forEach(a => a.muted = !isSpk);
         syncMyState();
+        
+        // 記錄喇叭切換
+        logUserEvent(isSpk ? 'spk_on' : 'spk_off', myName);
     }
 
-    function handleRemoteStream(pId, stream) {
-        let aud = document.getElementById('aud-' + pId);
+    function handleRemoteStream(peerId, stream) {
+        console.log('處理遠端音訊:', peerId);
+        remoteStreams.set(peerId, stream);
+        
+        let aud = document.getElementById('aud-' + peerId);
         if(!aud) {
             aud = document.createElement('audio');
-            aud.id = 'aud-' + pId;
+            aud.id = 'aud-' + peerId;
             aud.autoplay = true;
-            aud.playsinline = true; // 手機上自動播放
+            aud.playsinline = true;
             document.getElementById('audio-container').appendChild(aud);
         }
         aud.srcObject = stream;
@@ -567,7 +582,6 @@
     function playDingDing() {
         if(!audioCtx) return;
         
-        // 恢復 AudioContext（某些瀏覽器需要）
         if(audioCtx.state === 'suspended') {
             audioCtx.resume().catch(e => console.error('AudioContext 恢復失敗:', e));
         }
@@ -589,6 +603,26 @@
         beep(0.15, 1200);
     }
 
+    // 日誌記錄函數
+    async function logUserEvent(eventType, username) {
+        try {
+            const timestamp = new Date().toISOString();
+            const { error } = await client.from('user_activity_log').insert([{
+                username: username,
+                event_type: eventType,
+                timestamp: timestamp
+            }]);
+            
+            if (error) {
+                console.error('日誌記錄失敗:', error);
+            } else {
+                console.log(`已記錄事件: ${eventType} - ${username} - ${timestamp}`);
+            }
+        } catch (e) {
+            console.error('日誌記錄異常:', e);
+        }
+    }
+
     // 防止頁面被虛擬鍵盤遮擋
     window.addEventListener('resize', () => {
         const inputField = document.getElementById('msg-in');
@@ -602,26 +636,21 @@
         if (presenceChannel) {
             presenceChannel.unsubscribe();
         }
-        if (stateUpdateTimer) {
-            clearInterval(stateUpdateTimer);
-        }
         activeCalls.forEach(call => call.close());
         activeCalls.clear();
+        remoteStreams.clear();
     });
 
     // 頁面隱藏時清理
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
-            if (stateUpdateTimer) {
-                clearInterval(stateUpdateTimer);
-                stateUpdateTimer = null;
-            }
+            // 暫停所有音訊
+            document.querySelectorAll('audio').forEach(a => a.pause());
         } else {
-            if (!stateUpdateTimer) {
-                stateUpdateTimer = setInterval(() => {
-                    syncMyState();
-                }, 2000);
-            }
+            // 恢復音訊播放
+            document.querySelectorAll('audio').forEach(a => {
+                if (!a.muted) a.play().catch(e => console.error('音訊恢復失敗:', e));
+            });
         }
     });
 </script>
