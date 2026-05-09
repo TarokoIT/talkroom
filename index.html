@@ -34,6 +34,61 @@
         #login-screen { position: fixed; inset: 0; background: var(--dark); color: white; z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .login-box { background: #fff; color: #333; padding: 25px; border-radius: 20px; width: 85%; max-width: 350px; text-align: center; }
 
+        /* 退出畫面 */
+        #exit-screen { 
+            position: fixed; 
+            inset: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            z-index: 2000; 
+            display: none; 
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center; 
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .exit-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .exit-box h1 { margin: 0 0 20px 0; font-size: 28px; }
+        .exit-box p { margin: 0 0 30px 0; font-size: 16px; opacity: 0.9; }
+        .exit-box .exit-icon { font-size: 60px; margin-bottom: 20px; }
+        
+        .exit-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .exit-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        
+        .exit-btn.primary {
+            background: white;
+            color: #667eea;
+        }
+        
+        .exit-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
         /* 頂部人員名單 */
         .header { 
             background: #fff; 
@@ -219,6 +274,10 @@
             .btn { width: 40px; height: 40px; font-size: 16px; }
             #send-btn { width: 48px; }
             #msg-in { height: 40px; font-size: 14px; padding: 0 10px; }
+            
+            .exit-box { padding: 30px 20px; }
+            .exit-box h1 { font-size: 24px; }
+            .exit-box .exit-icon { font-size: 50px; }
         }
 
         /* 超小螢幕 (< 360px) */
@@ -252,6 +311,17 @@
         <input type="text" id="user-in" placeholder="您的暱稱" style="width:100%; padding:14px; margin-bottom:15px; border:1px solid #ddd; border-radius:12px; font-size:16px; text-align:center;">
         <button id="login-btn" onclick="initApp()" style="width:100%; padding:14px; background:var(--main); color:white; border:none; border-radius:12px; font-size:16px; font-weight:bold; cursor:pointer;">登入通訊</button>
         <p id="status-log" style="font-size:12px; color:#999; margin-top:15px;"></p>
+    </div>
+</div>
+
+<div id="exit-screen">
+    <div class="exit-box">
+        <div class="exit-icon">👋</div>
+        <h1>你已退出通訊</h1>
+        <p>感謝您的使用。您可以關閉此視窗或重新登入。</p>
+        <div class="exit-buttons">
+            <button class="exit-btn primary" onclick="location.reload()">重新登入</button>
+        </div>
     </div>
 </div>
 
@@ -307,7 +377,7 @@
     let audioCtx = null;
     let activeCalls = new Map();
     let remoteStreams = new Map();
-    let isExiting = false; // 防止重複退出
+    let isExiting = false;
 
     async function initApp() {
         const btn = document.getElementById('login-btn');
@@ -623,7 +693,7 @@
                 const o = audioCtx.createOscillator(), g = audioCtx.createGain();
                 o.connect(g); g.connect(audioCtx.destination);
                 o.frequency.setValueAtTime(freq, audioCtx.currentTime + offset);
-                g.gain.setValueAtValue(0.2, audioCtx.currentTime + offset);
+                g.gain.setValueAtTime(0.2, audioCtx.currentTime + offset);
                 g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + offset + 0.1);
                 o.start(audioCtx.currentTime + offset); 
                 o.stop(audioCtx.currentTime + offset + 0.1);
@@ -657,7 +727,7 @@
 
     // 退出應用程式
     async function exitApp() {
-        if (isExiting) return; // 防止重複退出
+        if (isExiting) return;
         isExiting = true;
 
         try {
@@ -665,7 +735,7 @@
             await logUserEvent('logout', myName);
             
             // 等待日誌記錄完成
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
             
             // 清理資源
             if (presenceChannel) {
@@ -687,15 +757,17 @@
                 peer.destroy();
             }
             
-            // 關閉視窗
-            setTimeout(() => {
-                window.close();
-            }, 300);
+            // 清除頁面內容並顯示退出訊息
+            document.body.innerHTML = '';
+            document.getElementById('exit-screen').style.display = 'flex';
+            document.body.appendChild(document.getElementById('exit-screen'));
             
         } catch (e) {
             console.error('退出過程中發生錯誤:', e);
-            // 即使出錯也強制關閉
-            window.close();
+            // 即使出錯也顯示退出畫面
+            document.body.innerHTML = '';
+            document.getElementById('exit-screen').style.display = 'flex';
+            document.body.appendChild(document.getElementById('exit-screen'));
         }
     }
 
@@ -710,7 +782,6 @@
     // 視窗關閉時清理
     window.addEventListener('beforeunload', async (e) => {
         if (!isExiting && myName) {
-            // 如果不是透過退出按鈕關閉，也要記錄登出
             await logUserEvent('logout', myName);
         }
     });
@@ -718,10 +789,8 @@
     // 頁面隱藏時清理
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
-            // 暫停所有音訊
             document.querySelectorAll('audio').forEach(a => a.pause());
         } else {
-            // 恢復音訊播放
             document.querySelectorAll('audio').forEach(a => {
                 if (!a.muted) a.play().catch(e => console.error('音訊恢復失敗:', e));
             });
