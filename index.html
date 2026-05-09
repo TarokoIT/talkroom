@@ -826,84 +826,58 @@
         }
     }
 
-    // 退出應用程式（強化版）
-    async function exitApp() {
-        if (isExiting) return;
-        isExiting = true;
+    // 退出應用程式（修復版）
+async function exitApp() {
+    if (isExiting) return;
+    isExiting = true;
 
-        try {
-            console.log('開始退出流程...');
-            
-            // 第一步：先發送最終的狀態更新（這是最關鍵的）
-            if (presenceChannel) {
-                try {
-                    await presenceChannel.track({
-                        peerId: myPeerId,
-                        mic: false,
-                        spk: false,
-                        lastUpdate: Date.now()
-                    });
-                    console.log('已發送最終狀態更新');
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                } catch (e) {
-                    console.error('狀態更新失敗:', e);
-                }
-            }
-            
-            // 第二步：主動取消 Presence 追蹤
-            if (presenceChannel) {
-                try {
-                    await presenceChannel.untrack();
-                    console.log('已取消 Presence 追蹤');
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                } catch (e) {
-                    console.error('取消追蹤失敗:', e);
-                }
-            }
-            
-            // 第三步：記錄退出時間
-            await logUserEvent('logout', myName);
-            await new Promise(resolve => setTimeout(resolve, 200));
-            
-            // 第四步：清理 Presence 連接
-            if (presenceChannel) {
-                try {
-                    await presenceChannel.unsubscribe();
-                    console.log('已取消 Presence 訂閱');
-                } catch (e) {
-                    console.error('取消訂閱失敗:', e);
-                }
-            }
-            
-            // 第五步：關閉所有通話
-            activeCalls.forEach(call => call.close());
-            activeCalls.clear();
-            remoteStreams.clear();
-            
-            // 停止麥克風
-            if (myStream) {
-                myStream.getTracks().forEach(track => track.stop());
-            }
-            
-            // 關閉 Peer 連接
-            if (peer) {
-                peer.destroy();
-            }
-            
-            // 第六步：清除頁面內容並顯示退出訊息
-            document.body.innerHTML = '';
-            document.getElementById('exit-screen').style.display = 'flex';
-            document.body.appendChild(document.getElementById('exit-screen'));
-            console.log('退出完成');
-            
-        } catch (e) {
-            console.error('退出過程中發生錯誤:', e);
-            // 即使出錯也顯示退出畫面
-            document.body.innerHTML = '';
-            document.getElementById('exit-screen').style.display = 'flex';
-            document.body.appendChild(document.getElementById('exit-screen'));
+    try {
+        console.log('開始退出流程...');
+        
+        // 1. 停止麥克風與音訊傳輸 (立即切斷聲音)
+        activeCalls.forEach(call => call.close());
+        activeCalls.clear();
+        remoteStreams.clear();
+        if (myStream) {
+            myStream.getTracks().forEach(track => track.stop());
         }
+
+        // 2. 顯示退出畫面 (不再清空 body，而是將其他區塊隱藏，避免 DOM 崩潰)
+        document.getElementById('login-screen').style.display = 'none';
+        document.querySelector('.header').style.display = 'none';
+        document.getElementById('chat-win').style.display = 'none';
+        document.querySelector('.footer').style.display = 'none';
+        document.getElementById('exit-screen').style.display = 'flex';
+
+        // 3. 確保 Supabase 確實收到離開訊號
+        if (presenceChannel) {
+            try {
+                // 發送最後的離線狀態
+                await presenceChannel.track({ peerId: myPeerId, mic: false, spk: false, lastUpdate: Date.now() });
+                // 強制等待 300 毫秒，確保封包在手機網路上送達
+                await new Promise(resolve => setTimeout(resolve, 300)); 
+                
+                // 正式取消追蹤
+                await presenceChannel.untrack();
+                await new Promise(resolve => setTimeout(resolve, 300));
+            } catch (e) {
+                console.error('狀態更新失敗:', e);
+            }
+        }
+        
+        // 4. 記錄登出並徹底斷開連線
+        await logUserEvent('logout', myName);
+        if (presenceChannel) await presenceChannel.unsubscribe();
+        if (peer) peer.destroy();
+        
+        console.log('退出流程與網路清理完成');
+        
+    } catch (e) {
+        console.error('退出過程中發生錯誤:', e);
+        // 如果有任何意外，確保退出畫面還是能顯示
+        document.getElementById('exit-screen').style.display = 'flex';
     }
+}
 
     // 防止頁面被虛擬鍵盤遮擋
     window.addEventListener('resize', () => {
