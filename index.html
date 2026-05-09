@@ -667,8 +667,26 @@
         const div = document.createElement('div');
         div.id = 'm-' + data.id;
         div.className = `msg ${isMe ? 'me' : 'other'}`;
+        
+        // 提取時間
+        let timeStr = '';
+        if (data.created_at) {
+            try {
+                const date = new Date(data.created_at);
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                timeStr = `${hours}:${minutes}`;
+            } catch (e) {
+                console.error('時間解析失敗:', e);
+                timeStr = '';
+            }
+        }
+        
         div.innerHTML = `
-            <span class="u-name" style="color:${data.name_color}">${data.username}</span>
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+                <span class="u-name" style="color:${data.name_color}">${data.username}</span>
+                ${timeStr ? `<span style="font-size: 10px; color: #999; opacity: 0.7;">${timeStr}</span>` : ''}
+            </div>
             <div style="color:${data.text_color}; font-size:${data.font_size}">${data.message}</div>
         `;
         win.appendChild(div);
@@ -808,40 +826,56 @@
         }
     }
 
-    // 退出應用程式
+    // 退出應用程式（強化版）
     async function exitApp() {
         if (isExiting) return;
         isExiting = true;
 
         try {
-            // 第一步：主動取消 Presence 追蹤（最關鍵 - 解決 Android 問題）
+            console.log('開始退出流程...');
+            
+            // 第一步：先發送最終的狀態更新（這是最關鍵的）
+            if (presenceChannel) {
+                try {
+                    await presenceChannel.track({
+                        peerId: myPeerId,
+                        mic: false,
+                        spk: false,
+                        lastUpdate: Date.now()
+                    });
+                    console.log('已發送最終狀態更新');
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                } catch (e) {
+                    console.error('狀態更新失敗:', e);
+                }
+            }
+            
+            // 第二步：主動取消 Presence 追蹤
             if (presenceChannel) {
                 try {
                     await presenceChannel.untrack();
                     console.log('已取消 Presence 追蹤');
-                    // 等待伺服器確認
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } catch (e) {
                     console.error('取消追蹤失敗:', e);
                 }
             }
             
-            // 第二步：記錄退出時間
+            // 第三步：記錄退出時間
             await logUserEvent('logout', myName);
+            await new Promise(resolve => setTimeout(resolve, 200));
             
-            // 等待日誌記錄完成
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            // 第三步：清理資源
+            // 第四步：清理 Presence 連接
             if (presenceChannel) {
                 try {
                     await presenceChannel.unsubscribe();
+                    console.log('已取消 Presence 訂閱');
                 } catch (e) {
                     console.error('取消訂閱失敗:', e);
                 }
             }
             
-            // 關閉所有通話
+            // 第五步：關閉所有通話
             activeCalls.forEach(call => call.close());
             activeCalls.clear();
             remoteStreams.clear();
@@ -856,10 +890,11 @@
                 peer.destroy();
             }
             
-            // 第四步：清除頁面內容並顯示退出訊息
+            // 第六步：清除頁面內容並顯示退出訊息
             document.body.innerHTML = '';
             document.getElementById('exit-screen').style.display = 'flex';
             document.body.appendChild(document.getElementById('exit-screen'));
+            console.log('退出完成');
             
         } catch (e) {
             console.error('退出過程中發生錯誤:', e);
