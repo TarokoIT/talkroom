@@ -773,15 +773,31 @@
         isExiting = true;
 
         try {
-            // 記錄退出時間
+            // 第一步：主動取消 Presence 追蹤（最關鍵 - 解決 Android 問題）
+            if (presenceChannel) {
+                try {
+                    await presenceChannel.untrack();
+                    console.log('已取消 Presence 追蹤');
+                    // 等待伺服器確認
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                } catch (e) {
+                    console.error('取消追蹤失敗:', e);
+                }
+            }
+            
+            // 第二步：記錄退出時間
             await logUserEvent('logout', myName);
             
             // 等待日誌記錄完成
             await new Promise(resolve => setTimeout(resolve, 300));
             
-            // 清理資源
+            // 第三步：清理資源
             if (presenceChannel) {
-                await presenceChannel.unsubscribe();
+                try {
+                    await presenceChannel.unsubscribe();
+                } catch (e) {
+                    console.error('取消訂閱失敗:', e);
+                }
             }
             
             // 關閉所有通話
@@ -799,7 +815,7 @@
                 peer.destroy();
             }
             
-            // 清除頁面內容並顯示退出訊息
+            // 第四步：清除頁面內容並顯示退出訊息
             document.body.innerHTML = '';
             document.getElementById('exit-screen').style.display = 'flex';
             document.body.appendChild(document.getElementById('exit-screen'));
@@ -821,21 +837,51 @@
         }
     });
 
-    // 視窗關閉時清理
-    window.addEventListener('beforeunload', async (e) => {
-        if (!isExiting && myName) {
-            await logUserEvent('logout', myName);
+    // 視窗關閉時清理（Android 關鍵）
+    window.addEventListener('beforeunload', (e) => {
+        if (!isExiting && myName && presenceChannel) {
+            // 同步方式立即取消追蹤
+            try {
+                presenceChannel.untrack();
+                console.log('beforeunload: 已取消 Presence 追蹤');
+            } catch (err) {
+                console.error('beforeunload 中取消追蹤失敗:', err);
+            }
         }
     });
 
-    // 頁面隱藏時清理
+    // 頁面隱藏時清理（Android 關鍵）
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
+            // 頁面隱藏時暫停音訊
             document.querySelectorAll('audio').forEach(a => a.pause());
+            
+            // 如果尚未退出，嘗試主動取消追蹤
+            if (!isExiting && presenceChannel && myName) {
+                try {
+                    presenceChannel.untrack();
+                    console.log('visibilitychange: 已取消 Presence 追蹤');
+                } catch (e) {
+                    console.error('頁面隱藏時取消追蹤失敗:', e);
+                }
+            }
         } else {
+            // 頁面恢復時恢復音訊
             document.querySelectorAll('audio').forEach(a => {
                 if (!a.muted) a.play().catch(e => console.error('音訊恢復失敗:', e));
             });
+        }
+    });
+    
+    // Android 特殊處理：監聽 pagehide 事件（比 beforeunload 更可靠）
+    window.addEventListener('pagehide', (e) => {
+        if (!isExiting && myName && presenceChannel) {
+            try {
+                presenceChannel.untrack();
+                console.log('pagehide: 已取消 Presence 追蹤');
+            } catch (err) {
+                console.error('pagehide 中取消追蹤失敗:', err);
+            }
         }
     });
 </script>
