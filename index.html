@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src * wss://* ws://* https://* http://*;">
     
     <title>極致優化版對講站</title>
@@ -13,27 +13,48 @@
     <style>
         :root { --main: #3ecf8e; --dark: #1e1e1e; --bg: #f5f7f9; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { 
-            margin: 0; font-family: -apple-system, "Noto Sans TC", sans-serif; 
-            display: flex; flex-direction: column; height: 100vh; background: var(--bg); 
-            overflow: hidden; 
+        
+        html, body { 
+            margin: 0; 
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, "Noto Sans TC", sans-serif; 
+            background: var(--bg); 
+            overflow: hidden;
+            position: fixed;
+        }
+
+        body {
+            display: flex; 
+            flex-direction: column;
         }
 
         /* 登入介面 */
         #login-screen { position: fixed; inset: 0; background: var(--dark); color: white; z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .login-box { background: #fff; color: #333; padding: 25px; border-radius: 20px; width: 85%; max-width: 350px; text-align: center; }
 
-        /* 頂部人員名單 (優化手機閱讀) */
-        .header { background: #fff; padding: 10px 15px; border-bottom: 1px solid #ddd; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        /* 頂部人員名單 */
+        .header { 
+            background: #fff; 
+            padding: 10px 15px; 
+            border-bottom: 1px solid #ddd; 
+            z-index: 100; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        
         .header-content { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
         .header-left { flex: 1; min-width: 0; }
-        .header-title { font-size: 12px; color: #888; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+        .header-title { font-size: 12px; color: #888; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
         .user-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
         .user-list::-webkit-scrollbar { display: none; }
         
         .u-tag { 
             background: #f0f2f5; padding: 6px 12px; border-radius: 12px; font-size: 13px; 
             border: 1px solid #eee; white-space: nowrap; display: flex; flex-direction: column; gap: 2px;
+            flex-shrink: 0;
         }
         .u-name-label { font-weight: bold; color: #333; }
         .u-status-label { font-size: 10px; display: flex; gap: 5px; }
@@ -52,25 +73,64 @@
         }
         .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
 
-        /* 聊天視窗 (手機版優化) */
-        #chat-win { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; background: #eef1f4; }
+        /* 聊天視窗 */
+        #chat-win { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 15px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+            background: #eef1f4;
+            min-height: 0;
+        }
+        
         .msg { max-width: 88%; padding: 10px 14px; border-radius: 18px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); line-height: 1.5; }
         .msg.me { align-self: flex-end; background: #d1f7e4; border-bottom-right-radius: 4px; }
         .msg.other { align-self: flex-start; border-bottom-left-radius: 4px; }
         .u-name { font-size: 11px; font-weight: 700; display: block; margin-bottom: 4px; opacity: 0.7; }
 
-        /* 底部控制區 (手機手勢友善) */
-        .footer { background: #fff; padding: 12px; border-top: 1px solid #eee; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+        /* 底部控制區 - 固定定位 */
+        .footer { 
+            background: #fff; 
+            padding: 12px; 
+            border-top: 1px solid #eee; 
+            flex-shrink: 0;
+            z-index: 50;
+        }
         
         /* 工具列：顏色與大小 */
-        .tools-row { display: flex; gap: 15px; margin-bottom: 12px; align-items: center; font-size: 13px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+        .tools-row { 
+            display: flex; 
+            gap: 12px; 
+            margin-bottom: 10px; 
+            align-items: center; 
+            font-size: 13px; 
+            overflow-x: auto; 
+            padding-bottom: 3px; 
+            scrollbar-width: none;
+        }
         .tools-row::-webkit-scrollbar { display: none; }
-        .tool-group { display: flex; align-items: center; gap: 5px; background: #f8f9fa; padding: 4px 10px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+        .tool-group { 
+            display: flex; 
+            align-items: center; 
+            gap: 5px; 
+            background: #f8f9fa; 
+            padding: 4px 10px; 
+            border-radius: 10px; 
+            white-space: nowrap; 
+            flex-shrink: 0; 
+        }
         input[type="color"] { border: none; width: 22px; height: 22px; background: none; padding: 0; cursor: pointer; }
         select { border: none; background: transparent; font-size: 13px; outline: none; font-weight: bold; }
 
-        /* 輸入列 */
-        .input-row { display: flex; gap: 8px; align-items: center; }
+        /* 輸入列 - 確保不被遮擋 */
+        .input-row { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center;
+            width: 100%;
+        }
         .btn { 
             width: 48px; height: 48px; border-radius: 15px; border: none; cursor: pointer; 
             display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s;
@@ -78,25 +138,28 @@
         }
         #send-btn { background: var(--main); color: white; width: 60px; }
         #msg-in { 
-            flex: 1; height: 48px; padding: 0 15px; border-radius: 15px; border: 1px solid #ddd; 
-            font-size: 16px; outline: none; background: #f8f9fa; min-width: 0;
+            flex: 1; 
+            height: 48px; 
+            padding: 0 15px; 
+            border-radius: 15px; 
+            border: 1px solid #ddd; 
+            font-size: 16px; 
+            outline: none; 
+            background: #f8f9fa; 
+            min-width: 0;
+            -webkit-appearance: none;
+            appearance: none;
         }
 
-        /* 手機版優化 */
-        @media (max-width: 768px) {
+        /* 平板版本 */
+        @media (max-width: 1024px) {
             .header-content { flex-wrap: wrap; }
             .header-left { width: 100%; }
             .header-controls { width: 100%; border-left: none; border-top: 2px solid #eee; padding-left: 0; padding-top: 10px; margin-top: 10px; }
-            
-            .msg { max-width: 92%; font-size: 15px; }
-            .btn { width: 44px; height: 44px; }
-            #msg-in { height: 44px; }
-            
-            .tools-row { flex-wrap: wrap; gap: 8px; }
-            .tool-group { padding: 3px 8px; font-size: 12px; }
         }
 
-        @media (max-width: 480px) {
+        /* 手機版優化 (768px 以下) */
+        @media (max-width: 768px) {
             .header { padding: 8px 12px; }
             .header-title { font-size: 11px; margin-bottom: 6px; }
             .u-tag { padding: 5px 10px; font-size: 12px; }
@@ -105,25 +168,63 @@
             .msg { max-width: 92%; font-size: 14px; padding: 8px 12px; }
             .u-name { font-size: 10px; }
             
+            #chat-win { padding: 12px; gap: 10px; }
+            
             .footer { padding: 10px; }
-            .tools-row { gap: 6px; margin-bottom: 10px; }
+            .tools-row { gap: 8px; margin-bottom: 8px; }
             .tool-group { padding: 3px 8px; font-size: 11px; gap: 3px; }
             
-            .btn { width: 40px; height: 40px; font-size: 18px; }
-            #send-btn { width: 50px; }
-            #msg-in { height: 40px; font-size: 15px; padding: 0 12px; }
+            .btn { width: 44px; height: 44px; font-size: 18px; }
+            #send-btn { width: 54px; }
+            #msg-in { height: 44px; font-size: 15px; padding: 0 12px; }
             
             .header-controls { gap: 6px; padding-left: 0; padding-top: 8px; margin-top: 8px; }
             .control-btn { width: 36px; height: 36px; font-size: 16px; }
         }
 
+        /* 小手機 (480px 以下) */
+        @media (max-width: 480px) {
+            html, body { font-size: 14px; }
+            
+            .header { padding: 6px 10px; }
+            .header-title { font-size: 10px; margin-bottom: 5px; }
+            .u-tag { padding: 4px 8px; font-size: 11px; }
+            .u-status-label { font-size: 8px; }
+            
+            #chat-win { padding: 10px; gap: 8px; }
+            .msg { max-width: 90%; font-size: 13px; padding: 7px 11px; }
+            .u-name { font-size: 9px; }
+            
+            .footer { padding: 8px; }
+            .tools-row { gap: 6px; margin-bottom: 6px; }
+            .tool-group { padding: 2px 6px; font-size: 10px; gap: 2px; }
+            
+            .btn { width: 40px; height: 40px; font-size: 16px; }
+            #send-btn { width: 48px; }
+            #msg-in { height: 40px; font-size: 14px; padding: 0 10px; }
+            
+            .header-controls { gap: 5px; padding-left: 0; padding-top: 6px; margin-top: 6px; }
+            .control-btn { width: 34px; height: 34px; font-size: 14px; }
+        }
+
         /* 超小螢幕 (< 360px) */
         @media (max-width: 360px) {
-            .tools-row { gap: 4px; }
-            .tool-group { padding: 2px 6px; font-size: 10px; }
-            .btn { width: 38px; height: 38px; font-size: 16px; }
-            #send-btn { width: 45px; }
-            #msg-in { height: 38px; font-size: 14px; }
+            .header { padding: 5px 8px; }
+            .header-title { font-size: 9px; margin-bottom: 4px; }
+            .u-tag { padding: 3px 6px; font-size: 10px; }
+            
+            #chat-win { padding: 8px; gap: 6px; }
+            .msg { max-width: 88%; font-size: 12px; padding: 6px 10px; }
+            
+            .footer { padding: 6px; }
+            .tools-row { gap: 4px; margin-bottom: 4px; }
+            .tool-group { padding: 2px 5px; font-size: 9px; }
+            
+            .btn { width: 36px; height: 36px; font-size: 14px; }
+            #send-btn { width: 44px; }
+            #msg-in { height: 36px; font-size: 13px; padding: 0 8px; }
+            
+            .control-btn { width: 32px; height: 32px; font-size: 12px; }
         }
     </style>
 </head>
@@ -190,6 +291,7 @@
     let myName = "", myPeerId = "", peer = null, myStream = null, presenceChannel = null;
     let isMic = false, isSpk = true;
     let audioCtx = null;
+    let activeCalls = new Map(); // 追蹤活躍的通話連接
 
     async function initApp() {
         const btn = document.getElementById('login-btn');
@@ -201,25 +303,65 @@
         log.innerText = "正在取得權限...";
 
         try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            myStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 初始化 AudioContext
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            // 請求麥克風權限
+            myStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } 
+            });
+            
+            // 初始化時麥克風關閉
             myStream.getAudioTracks()[0].enabled = false;
 
-            peer = new Peer();
+            // 初始化 PeerJS
+            peer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ]
+                }
+            });
+
             peer.on('open', (id) => {
                 myPeerId = id;
+                log.innerText = "連線成功！";
                 setupRealtime();
                 document.getElementById('login-screen').style.display = 'none';
             });
 
             peer.on('call', (call) => {
+                // 接收來電
                 call.answer(myStream);
-                call.on('stream', (remoteStream) => handleRemoteStream(call.peer, remoteStream));
+                activeCalls.set(call.peer, call);
+                
+                call.on('stream', (remoteStream) => {
+                    handleRemoteStream(call.peer, remoteStream);
+                });
+                
+                call.on('close', () => {
+                    activeCalls.delete(call.peer);
+                });
+            });
+
+            peer.on('error', (err) => {
+                console.error('PeerJS 錯誤:', err);
+                log.innerText = "連線錯誤：" + err.type;
             });
 
         } catch (e) {
-            alert("初始化失敗：請務必使用 HTTPS 並允許麥克風權限");
-            location.reload();
+            console.error('初始化失敗:', e);
+            alert("初始化失敗：請務必使用 HTTPS 並允許麥克風權限\n\n錯誤: " + e.message);
+            btn.disabled = false;
+            log.innerText = "初始化失敗";
         }
     }
 
@@ -232,12 +374,26 @@
             })
             .subscribe();
 
-        // B. Presence 狀態監聽 (核心：確保 track 被正確調用)
+        // B. Presence 狀態監聽
         presenceChannel = client.channel('online_users', { config: { presence: { key: myName } } });
         
         presenceChannel
             .on('presence', { event: 'sync' }, () => {
                 renderUserList(presenceChannel.presenceState());
+                // 當有新人上線時，嘗試建立通話連接
+                if (isMic) {
+                    initiateCalls();
+                }
+            })
+            .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+                // 新使用者加入時
+                if (isMic) {
+                    newPresences.forEach(presence => {
+                        if (presence.peerId && presence.peerId !== myPeerId) {
+                            makeCall(presence.peerId);
+                        }
+                    });
+                }
             })
             .subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
@@ -255,7 +411,7 @@
                 peerId: myPeerId,
                 mic: isMic,
                 spk: isSpk,
-                lastUpdate: Date.now() // 強制觸發同步
+                lastUpdate: Date.now()
             });
         }
     }
@@ -314,17 +470,52 @@
         if(data) data.forEach(renderMsg);
     }
 
+    // 主動發起通話
+    function makeCall(peerId) {
+        if (activeCalls.has(peerId)) return; // 已有通話連接
+        
+        const call = peer.call(peerId, myStream);
+        activeCalls.set(peerId, call);
+        
+        call.on('stream', (remoteStream) => {
+            handleRemoteStream(peerId, remoteStream);
+        });
+        
+        call.on('close', () => {
+            activeCalls.delete(peerId);
+        });
+        
+        call.on('error', (err) => {
+            console.error('通話錯誤:', err);
+            activeCalls.delete(peerId);
+        });
+    }
+
+    // 向所有線上使用者發起通話
+    function initiateCalls() {
+        const state = presenceChannel.presenceState();
+        Object.values(state).forEach(presences => {
+            presences.forEach(u => {
+                if(u.peerId && u.peerId !== myPeerId) {
+                    makeCall(u.peerId);
+                }
+            });
+        });
+    }
+
     function toggleMic() {
         isMic = !isMic;
         myStream.getAudioTracks()[0].enabled = isMic;
         document.getElementById('mic-btn').className = isMic ? "control-btn on" : "control-btn";
-        syncMyState(); // 立即同步狀態到名單
+        syncMyState();
 
         if(isMic) {
-            const state = presenceChannel.presenceState();
-            Object.values(state).forEach(p => p.forEach(u => {
-                if(u.peerId && u.peerId !== myPeerId) peer.call(u.peerId, myStream);
-            }));
+            // 麥克風開啟時，向所有線上使用者發起通話
+            setTimeout(() => initiateCalls(), 500);
+        } else {
+            // 麥克風關閉時，關閉所有通話
+            activeCalls.forEach(call => call.close());
+            activeCalls.clear();
         }
     }
 
@@ -332,7 +523,7 @@
         isSpk = !isSpk;
         document.getElementById('spk-btn').innerText = isSpk ? "🔊" : "🔇";
         document.querySelectorAll('audio').forEach(a => a.muted = !isSpk);
-        syncMyState(); // 立即同步狀態到名單
+        syncMyState();
     }
 
     function handleRemoteStream(pId, stream) {
@@ -341,6 +532,7 @@
             aud = document.createElement('audio');
             aud.id = 'aud-' + pId;
             aud.autoplay = true;
+            aud.playsinline = true; // 手機上自動播放
             document.getElementById('audio-container').appendChild(aud);
         }
         aud.srcObject = stream;
@@ -349,17 +541,36 @@
 
     function playDingDing() {
         if(!audioCtx) return;
-        if(audioCtx.state === 'suspended') audioCtx.resume();
+        
+        // 恢復 AudioContext（某些瀏覽器需要）
+        if(audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(e => console.error('AudioContext 恢復失敗:', e));
+        }
+        
         const beep = (offset, freq) => {
-            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-            o.connect(g); g.connect(audioCtx.destination);
-            o.frequency.setValueAtTime(freq, audioCtx.currentTime + offset);
-            g.gain.setValueAtTime(0.2, audioCtx.currentTime + offset);
-            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + offset + 0.1);
-            o.start(audioCtx.currentTime + offset); o.stop(audioCtx.currentTime + offset + 0.1);
+            try {
+                const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                o.connect(g); g.connect(audioCtx.destination);
+                o.frequency.setValueAtTime(freq, audioCtx.currentTime + offset);
+                g.gain.setValueAtTime(0.2, audioCtx.currentTime + offset);
+                g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + offset + 0.1);
+                o.start(audioCtx.currentTime + offset); 
+                o.stop(audioCtx.currentTime + offset + 0.1);
+            } catch(e) {
+                console.error('播放提示音失敗:', e);
+            }
         };
-        beep(0, 1000); beep(0.15, 1200);
+        beep(0, 1000); 
+        beep(0.15, 1200);
     }
+
+    // 防止頁面被虛擬鍵盤遮擋
+    window.addEventListener('resize', () => {
+        const inputField = document.getElementById('msg-in');
+        if (inputField && document.activeElement === inputField) {
+            inputField.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
 </script>
 </body>
 </html>
