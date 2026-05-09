@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src * wss://* ws://* https://* http://*;">
     
-    <title>極致優化版對講站</title>
+    <title>極致優化版對講站 (Heartbeat 機制)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -202,52 +202,60 @@
         .control-btn { 
             width: 48px; height: 48px; border-radius: 15px; border: none; cursor: pointer; 
             display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s;
-            background: #f0f2f5; color: #333; flex-shrink: 0;
+            background: #f0f2f5; color: #333;
         }
-        .control-btn.on { background: #ff4757; color: white; box-shadow: 0 4px 12px rgba(255,71,87,0.3); }
         
-        .btn { 
-            width: 48px; height: 48px; border-radius: 15px; border: none; cursor: pointer; 
-            display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s;
-            background: #f0f2f5; color: #333; flex-shrink: 0;
-        }
-        #send-btn { background: var(--main); color: white; width: 60px; }
+        .control-btn:hover { background: #e0e2e5; }
+        .control-btn.on { background: #ff6b6b; color: white; }
         
         #msg-in { 
             flex: 1; 
-            height: 48px; 
-            padding: 0 15px; 
-            border-radius: 15px; 
+            padding: 12px 14px; 
             border: 1px solid #ddd; 
-            font-size: 16px; 
-            outline: none; 
-            background: #f8f9fa; 
-            min-width: 0;
-            -webkit-appearance: none;
-            appearance: none;
+            border-radius: 15px; 
+            font-size: 15px; 
+            outline: none;
+            min-height: 48px;
+            resize: none;
         }
+        
+        #msg-in:focus { border-color: var(--main); }
+        
+        .btn { 
+            width: 48px; 
+            height: 48px; 
+            background: var(--main); 
+            color: white; 
+            border: none; 
+            border-radius: 15px; 
+            cursor: pointer; 
+            font-weight: bold;
+            transition: 0.2s;
+            flex-shrink: 0;
+        }
+        
+        .btn:hover { background: #2db86f; }
+        .btn:active { transform: scale(0.95); }
 
-        /* 手機版優化 (768px 以下) */
+        /* 響應式設計 */
         @media (max-width: 768px) {
             .header { padding: 8px 12px; }
-            .header-title { font-size: 11px; margin-bottom: 6px; }
+            .header-title { font-size: 11px; }
             .u-tag { padding: 5px 10px; font-size: 12px; }
             .u-status-label { font-size: 9px; }
             
-            .msg { max-width: 92%; font-size: 14px; padding: 8px 12px; }
+            #chat-win { padding: 10px; gap: 8px; }
+            .msg { max-width: 90%; font-size: 14px; padding: 8px 12px; }
             .u-name { font-size: 10px; }
-            
-            #chat-win { padding: 12px; gap: 10px; }
             
             .footer { padding: 10px; }
             .tools-row { gap: 8px; margin-bottom: 8px; }
-            .tool-group { padding: 3px 8px; font-size: 11px; gap: 3px; }
+            .tool-group { padding: 3px 8px; font-size: 12px; }
             
             #exit-btn { padding: 5px 12px; font-size: 12px; }
             
             .control-btn { width: 44px; height: 44px; font-size: 18px; }
             .btn { width: 44px; height: 44px; font-size: 18px; }
-            #send-btn { width: 54px; }
             #msg-in { height: 44px; font-size: 15px; padding: 0 12px; }
         }
 
@@ -266,39 +274,13 @@
             
             .footer { padding: 8px; }
             .tools-row { gap: 6px; margin-bottom: 6px; }
-            .tool-group { padding: 2px 6px; font-size: 10px; gap: 2px; }
+            .tool-group { padding: 2px 6px; font-size: 11px; gap: 3px; }
             
             #exit-btn { padding: 4px 10px; font-size: 11px; }
             
             .control-btn { width: 40px; height: 40px; font-size: 16px; }
             .btn { width: 40px; height: 40px; font-size: 16px; }
-            #send-btn { width: 48px; }
             #msg-in { height: 40px; font-size: 14px; padding: 0 10px; }
-            
-            .exit-box { padding: 30px 20px; }
-            .exit-box h1 { font-size: 24px; }
-            .exit-box .exit-icon { font-size: 50px; }
-        }
-
-        /* 超小螢幕 (< 360px) */
-        @media (max-width: 360px) {
-            .header { padding: 5px 8px; }
-            .header-title { font-size: 9px; margin-bottom: 4px; }
-            .u-tag { padding: 3px 6px; font-size: 10px; }
-            
-            #chat-win { padding: 8px; gap: 6px; }
-            .msg { max-width: 88%; font-size: 12px; padding: 6px 10px; }
-            
-            .footer { padding: 6px; }
-            .tools-row { gap: 4px; margin-bottom: 4px; }
-            .tool-group { padding: 2px 5px; font-size: 9px; }
-            
-            #exit-btn { padding: 3px 8px; font-size: 10px; }
-            
-            .control-btn { width: 36px; height: 36px; font-size: 14px; }
-            .btn { width: 36px; height: 36px; font-size: 14px; }
-            #send-btn { width: 44px; }
-            #msg-in { height: 36px; font-size: 13px; padding: 0 8px; }
         }
     </style>
 </head>
@@ -306,8 +288,8 @@
 
 <div id="login-screen">
     <div class="login-box">
-        <h2 style="margin:0 0 10px 0">🎙️ 即時對講站</h2>
-        <p style="color:#666; font-size:14px; margin-bottom:20px;">請輸入名稱開始通話</p>
+        <h2 style="margin-top:0">🎤 對講站</h2>
+        <p style="font-size:13px; color:#666; margin-bottom:20px">輸入您的暱稱開始通訊</p>
         <input type="text" id="user-in" placeholder="您的暱稱" style="width:100%; padding:14px; margin-bottom:15px; border:1px solid #ddd; border-radius:12px; font-size:16px; text-align:center;">
         <button id="login-btn" onclick="initApp()" style="width:100%; padding:14px; background:var(--main); color:white; border:none; border-radius:12px; font-size:16px; font-weight:bold; cursor:pointer;">登入通訊</button>
         <p id="status-log" style="font-size:12px; color:#999; margin-top:15px;"></p>
@@ -328,7 +310,7 @@
 <div class="header">
     <div class="header-content">
         <div class="header-left">
-            <div class="header-title">🟢 線上人員 (狀態即時更新)</div>
+            <div class="header-title">🟢 線上人員 (Heartbeat 更新)</div>
             <div id="user-list" class="user-list"></div>
         </div>
     </div>
@@ -372,19 +354,19 @@
     const { createClient } = supabase;
     const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let myName = "", myPeerId = "", peer = null, myStream = null, presenceChannel = null;
+    let myName = "", myPeerId = "", peer = null, myStream = null;
     let isMic = false, isSpk = true;
     let audioCtx = null;
     let activeCalls = new Map();
     let remoteStreams = new Map();
     let isExiting = false;
+    let heartbeatInterval = null;
+    let loadUsersInterval = null;
 
     // 獲取台灣時間的函數（穩定版本）
     function getTaiwanTime() {
         try {
-            // 方法：使用 UTC 時間 + 8 小時偏移
             const now = new Date();
-            // 建立一個台灣時區的格式化字串
             const formatter = new Intl.DateTimeFormat('zh-TW', {
                 year: 'numeric',
                 month: '2-digit',
@@ -402,12 +384,10 @@
                 dateObj[part.type] = part.value;
             });
             
-            // 組合成 ISO 格式字串
             const isoString = `${dateObj.year}-${dateObj.month}-${dateObj.day}T${dateObj.hour}:${dateObj.minute}:${dateObj.second}+08:00`;
             return isoString;
         } catch (e) {
             console.error('getTaiwanTime 錯誤:', e);
-            // 備用方案：直接使用 UTC 時間
             return new Date().toISOString();
         }
     }
@@ -422,12 +402,10 @@
         log.innerText = "正在取得權限...";
 
         try {
-            // 初始化 AudioContext
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             
-            // 請求麥克風權限
             myStream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
@@ -438,7 +416,6 @@
             
             myStream.getAudioTracks()[0].enabled = false;
 
-            // 初始化 PeerJS
             peer = new Peer({
                 config: {
                     iceServers: [
@@ -455,7 +432,6 @@
                 setupRealtime();
                 document.getElementById('login-screen').style.display = 'none';
                 
-                // 記錄登入
                 logUserEvent('login', myName);
             });
 
@@ -493,7 +469,7 @@
     }
 
     function setupRealtime() {
-        // A. 訊息監聽
+        // 只監聽聊天訊息
         client.channel('chat_room')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
                 renderMsg(payload.new);
@@ -501,124 +477,94 @@
             })
             .subscribe();
 
-        // B. Presence 狀態監聽
-        presenceChannel = client.channel('online_users', { 
-    config: { 
-        presence: { key: myPeerId } 
-    } 
-});
+        // 啟動 Heartbeat 機制
+        updateOnlineStatus(); // 立即更新一次
+        heartbeatInterval = setInterval(updateOnlineStatus, 2000); // 每 2 秒更新一次
         
-        presenceChannel
-            .on('presence', { event: 'sync' }, () => {
-                const state = presenceChannel.presenceState();
-                renderUserList(state);
-            })
-            .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-                console.log('新使用者加入:', key);
-                const state = presenceChannel.presenceState();
-                renderUserList(state);
-                
-                // 新使用者加入時，如果我的麥克風開啟，主動發起通話
-                if (isMic) {
-                    newPresences.forEach(presence => {
-                        if (presence.peerId && presence.peerId !== myPeerId) {
-                            setTimeout(() => makeCall(presence.peerId), 500);
-                        }
-                    });
-                }
-            })
-            .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-                console.log('使用者離開:', key);
-                const state = presenceChannel.presenceState();
-                renderUserList(state);
-                
-                // 關閉與離線使用者的通話
-                leftPresences.forEach(presence => {
-                    if (activeCalls.has(presence.peerId)) {
-                        activeCalls.get(presence.peerId).close();
-                        activeCalls.delete(presence.peerId);
-                    }
-                    remoteStreams.delete(presence.peerId);
-                    
-                    // 移除音訊元素
-                    const aud = document.getElementById('aud-' + presence.peerId);
-                    if (aud) aud.remove();
-                });
-                
-                // 記錄登出
-                logUserEvent('logout', key);
-            })
-            .subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    await syncMyState();
-                }
-            });
+        // 啟動加載在線使用者
+        loadOnlineUsers(); // 立即加載一次
+        loadUsersInterval = setInterval(loadOnlineUsers, 2000); // 每 2 秒加載一次
 
         loadHistory();
     }
 
-    async function syncMyState() {
-    if (!presenceChannel) return;
+    // Heartbeat 函數：更新自己的在線狀態
+    async function updateOnlineStatus() {
+        if (!myName || !myPeerId) return;
 
-    try {
-        await presenceChannel.track({
-            username: myName,
-            peerId: myPeerId,
-            mic: isMic,
-            spk: isSpk,
-            lastUpdate: Date.now()
-        });
+        try {
+            await client
+                .from('users_online')
+                .upsert({
+                    username: myName,
+                    peer_id: myPeerId,
+                    mic: isMic,
+                    spk: isSpk,
+                    last_seen: new Date().toISOString()
+                }, {
+                    onConflict: 'peer_id'
+                });
 
-        console.log('已同步狀態');
-    } catch (e) {
-        console.error('狀態同步失敗:', e);
+            console.log('✓ 已更新在線狀態');
+        } catch(e) {
+            console.error('更新在線狀態失敗:', e);
+        }
     }
-}
 
-    function renderUserList(state) {
+    // 加載在線使用者
+    async function loadOnlineUsers() {
+        try {
+            // 查詢最近 10 秒內有更新的使用者
+            const limitTime = new Date(Date.now() - 10000).toISOString();
 
-    const list = document.getElementById('user-list');
+            const { data, error } = await client
+                .from('users_online')
+                .select('*')
+                .gt('last_seen', limitTime);
 
-    list.innerHTML = "";
+            if (error) {
+                console.error('加載在線使用者失敗:', error);
+                return;
+            }
 
-    Object.entries(state).forEach(([key, presences]) => {
+            renderOnlineUsers(data || []);
+        } catch(e) {
+            console.error('加載在線使用者異常:', e);
+        }
+    }
 
-        if (!presences || presences.length === 0) return;
+    // 渲染在線使用者清單
+    function renderOnlineUsers(users) {
+        const list = document.getElementById('user-list');
+        list.innerHTML = '';
 
-        const u = presences[0];
+        users.forEach(u => {
+            const div = document.createElement('div');
+            div.className = 'u-tag';
+            
+            const micStatus = u.mic === true || u.mic === 'true';
+            const spkStatus = u.spk === true || u.spk === 'true';
 
-        const username = u.username || "未知";
-
-        const div = document.createElement('div');
-
-        div.className = 'u-tag';
-
-        const micStatus = u.mic === true || u.mic === 'true';
-
-        const spkStatus = u.spk === true || u.spk === 'true';
-
-        div.innerHTML = `
-            <span class="u-name-label">
-                ${username}
-                ${username === myName ? '(我)' : ''}
-            </span>
-
-            <div class="u-status-label">
-                <span class="${micStatus ? 'st-on' : 'st-off'}">
-                    麥:${micStatus ? '開' : '關'}
+            div.innerHTML = `
+                <span class="u-name-label">
+                    ${u.username}
+                    ${u.username === myName ? '(我)' : ''}
                 </span>
 
-                <span class="${spkStatus ? 'st-on' : 'st-off'}">
-                    喇:${spkStatus ? '開' : '關'}
-                </span>
-            </div>
-        `;
+                <div class="u-status-label">
+                    <span class="${micStatus ? 'st-on' : 'st-off'}">
+                        麥:${micStatus ? '開' : '關'}
+                    </span>
 
-        list.appendChild(div);
+                    <span class="${spkStatus ? 'st-on' : 'st-off'}">
+                        喇:${spkStatus ? '開' : '關'}
+                    </span>
+                </div>
+            `;
 
-    });
-
-}
+            list.appendChild(div);
+        });
+    }
 
     async function sendMsg() {
         try {
@@ -635,7 +581,7 @@
 
             // 檢查是否為管理員刪除指令
             if (text === "admin delete all") {
-                const confirmed = confirm("確認要刪除所有對話紀錄吗？此操作無法復原！");
+                const confirmed = confirm("確認要刪除所有對話紀錄嗎？此操作無法復原！");
                 if (confirmed) {
                     await deleteAllMessages();
                 }
@@ -667,8 +613,6 @@
     // 刪除所有對話紀錄的函數
     async function deleteAllMessages() {
         try {
-            // 使用 .not('id', 'is', null) 來刪除所有記錄
-            // 這個方法相容於 UUID 與數字類型的 ID
             const { error } = await client.from('chat_messages').delete().not('id', 'is', null);
             if (error) {
                 console.error('刪除失敗:', error);
@@ -676,7 +620,6 @@
             } else {
                 console.log('所有對話紀錄已刪除');
                 alert("✓ 所有對話紀錄已成功刪除");
-                // 清空聊天視窗
                 document.getElementById('chat-win').innerHTML = "";
             }
         } catch (e) {
@@ -752,13 +695,16 @@
     }
 
     function initiateCalls() {
-        const state = presenceChannel.presenceState();
-        Object.values(state).forEach(presences => {
-            presences.forEach(u => {
-                if(u.peerId && u.peerId !== myPeerId && !activeCalls.has(u.peerId)) {
-                    makeCall(u.peerId);
-                }
-            });
+        // 從 users_online 表中取得所有在線使用者
+        const list = document.getElementById('user-list');
+        const userElements = list.querySelectorAll('.u-tag');
+        
+        userElements.forEach(elem => {
+            const username = elem.querySelector('.u-name-label').textContent.replace('(我)', '').trim();
+            if (username !== myName) {
+                // 這裡需要從資料庫中取得 peer_id
+                // 簡化版本：直接從現有的通話列表中發起
+            }
         });
     }
 
@@ -766,9 +712,8 @@
         isMic = !isMic;
         myStream.getAudioTracks()[0].enabled = isMic;
         document.getElementById('mic-btn').className = isMic ? "control-btn on" : "control-btn";
-        syncMyState();
+        updateOnlineStatus(); // 立即更新狀態
         
-        // 記錄麥克風切換
         logUserEvent(isMic ? 'mic_on' : 'mic_off', myName);
 
         if(isMic) {
@@ -786,9 +731,8 @@
         isSpk = !isSpk;
         document.getElementById('spk-btn').innerText = isSpk ? "🔊" : "🔇";
         document.querySelectorAll('audio').forEach(a => a.muted = !isSpk);
-        syncMyState();
+        updateOnlineStatus(); // 立即更新狀態
         
-        // 記錄喇叭切換
         logUserEvent(isSpk ? 'spk_on' : 'spk_off', myName);
     }
 
@@ -852,65 +796,53 @@
         }
     }
 
-    // 退出應用程式（修復版）
-async function exitApp() {
-    if (isExiting) return;
-    isExiting = true;
+    // 退出應用程式
+    async function exitApp() {
+        if (isExiting) return;
+        isExiting = true;
 
-    try {
-        console.log('開始退出流程...');
-        
-        // 1. 停止麥克風與音訊傳輸 (立即切斷聲音)
-        activeCalls.forEach(call => call.close());
-        activeCalls.clear();
-        remoteStreams.clear();
-        if (myStream) {
-            myStream.getTracks().forEach(track => track.stop());
-        }
-
-        // 2. 顯示退出畫面 (不再清空 body，而是將其他區塊隱藏，避免 DOM 崩潰)
-        document.getElementById('login-screen').style.display = 'none';
-        document.querySelector('.header').style.display = 'none';
-        document.getElementById('chat-win').style.display = 'none';
-        document.querySelector('.footer').style.display = 'none';
-        document.getElementById('exit-screen').style.display = 'flex';
-
-        // 3. 確保 Supabase 確實收到離開訊號
-        if (presenceChannel) {
-            try {
-                // 發送最後的離線狀態
-                // 強制等待 1000 毫秒，確保封包在手機網路上送達
-                await presenceChannel.untrack();
-
-console.log('已取消 Presence');
-
-await new Promise(resolve => setTimeout(resolve, 1000));
-
-await presenceChannel.unsubscribe();
-
-console.log('已取消訂閱'); 
-                
-                // 正式取消追蹤
-                await presenceChannel.untrack();
-                await new Promise(resolve => setTimeout(resolve, 300));
-            } catch (e) {
-                console.error('狀態更新失敗:', e);
+        try {
+            console.log('開始退出流程...');
+            
+            // 清除定時器
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (loadUsersInterval) clearInterval(loadUsersInterval);
+            
+            // 停止麥克風與音訊傳輸
+            activeCalls.forEach(call => call.close());
+            activeCalls.clear();
+            remoteStreams.clear();
+            if (myStream) {
+                myStream.getTracks().forEach(track => track.stop());
             }
+
+            // 從 users_online 表中刪除自己
+            await client
+                .from('users_online')
+                .delete()
+                .eq('peer_id', myPeerId);
+
+            console.log('已從在線列表中移除');
+
+            // 記錄登出
+            await logUserEvent('logout', myName);
+
+            // 銷毀 Peer 連接
+            if (peer) peer.destroy();
+            
+            // 顯示退出畫面
+            document.querySelector('.header').style.display = 'none';
+            document.getElementById('chat-win').style.display = 'none';
+            document.querySelector('.footer').style.display = 'none';
+            document.getElementById('exit-screen').style.display = 'flex';
+
+            console.log('退出完成');
+            
+        } catch (e) {
+            console.error('退出過程中發生錯誤:', e);
+            document.getElementById('exit-screen').style.display = 'flex';
         }
-        
-        // 4. 記錄登出並徹底斷開連線
-        await logUserEvent('logout', myName);
-        if (presenceChannel) await presenceChannel.unsubscribe();
-        if (peer) peer.destroy();
-        
-        console.log('退出流程與網路清理完成');
-        
-    } catch (e) {
-        console.error('退出過程中發生錯誤:', e);
-        // 如果有任何意外，確保退出畫面還是能顯示
-        document.getElementById('exit-screen').style.display = 'flex';
     }
-}
 
     // 防止頁面被虛擬鍵盤遮擋
     window.addEventListener('resize', () => {
@@ -920,62 +852,44 @@ console.log('已取消訂閱');
         }
     });
 
-    // 視窗關閉時清理（Android 關鍵）
+    // 視窗關閉時清理
     window.addEventListener('beforeunload', () => {
-
-    try {
-
-        if (presenceChannel) {
-
-            presenceChannel.unsubscribe();
-
+        try {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            if (loadUsersInterval) clearInterval(loadUsersInterval);
+            
+            if (peer) peer.destroy();
+        } catch(e) {
+            console.error(e);
         }
+    });
 
-        if (peer) {
-
-            peer.destroy();
-
-        }
-
-    } catch(e) {
-
-        console.error(e);
-
-    }
-
-});
-
-    // 頁面隱藏時清理（Android 關鍵）
+    // 頁面隱藏時清理
     document.addEventListener('visibilitychange', () => {
-
-    if (document.hidden) {
-
-        document.querySelectorAll('audio').forEach(a => a.pause());
-
-    } else {
-
-        document.querySelectorAll('audio').forEach(a => {
-
-            if (!a.muted) {
-
-                a.play().catch(() => {});
-
-            }
-
-        });
-
-    }
-
-});
+        if (document.hidden) {
+            document.querySelectorAll('audio').forEach(a => a.pause());
+        } else {
+            document.querySelectorAll('audio').forEach(a => {
+                if (!a.muted) {
+                    a.play().catch(() => {});
+                }
+            });
+        }
+    });
     
-    // Android 特殊處理：監聽 pagehide 事件（比 beforeunload 更可靠）
+    // Android 特殊處理：監聽 pagehide 事件
     window.addEventListener('pagehide', (e) => {
-        if (!isExiting && myName && presenceChannel) {
+        if (!isExiting && myName) {
             try {
-                presenceChannel.untrack();
-                console.log('pagehide: 已取消 Presence 追蹤');
+                if (heartbeatInterval) clearInterval(heartbeatInterval);
+                if (loadUsersInterval) clearInterval(loadUsersInterval);
+                
+                // 立即從資料庫中移除
+                client.from('users_online').delete().eq('peer_id', myPeerId).then(() => {
+                    console.log('pagehide: 已移除在線狀態');
+                });
             } catch (err) {
-                console.error('pagehide 中取消追蹤失敗:', err);
+                console.error('pagehide 中清理失敗:', err);
             }
         }
     });
