@@ -9,13 +9,36 @@ let selected='HK',state=null,peer=null,stream=null,mic=false,speaker=true;
 let timer=null,syncTask=null,peers=[],messagesKey='',generation=0,lastSync=0;
 let audioContext=null,wakeLock=null,joining=false,micBusy=false;
 const outgoing=new Map(),incoming=new Map(),pending=new Set();
+const catalog=new Map();let catalogBusy=false;
+let historyRevision=null;
+const meters=new Map();
+function removeMeter(id){const meter=meters.get(id);if(meter){meter.source.disconnect();meter.analyser.disconnect();meters.delete(id);}}
+function watchAudio(id,media){
+ removeMeter(id);if(!audioContext)return;
+ const source=audioContext.createMediaStreamSource(media),analyser=audioContext.createAnalyser();
+ analyser.fftSize=512;source.connect(analyser);
+ meters.set(id,{source,analyser,samples:new Float32Array(512),activeUntil:0});
+}
+setInterval(()=>{
+ const now=performance.now();
+ for(const [id,meter] of meters){
+  meter.analyser.getFloatTimeDomainData(meter.samples);
+  const rms=Math.sqrt(meter.samples.reduce((sum,v)=>sum+v*v,0)/meter.samples.length);
+  if(audioContext?.state==='running'&&rms>.025&&(id!==state?.session_id||mic))meter.activeUntil=now+280;
+ }
+ for(const tag of $('user-list').children){
+  const talking=!!state&&!!peers.find(p=>p.id===tag.dataset.session&&p.mic)&&
+   (meters.get(tag.dataset.session)?.activeUntil||0)>now;
+  tag.classList.toggle('speaking',talking);
+ }
+},100);
 function errorText(e){return e?.message||String(e);}
 function status(text){$('connection-status').textContent=text;}
 function report(e){$('room-error').textContent=errorText(e);}
 function choose(code){
  selected=code;
  for(const button of $('rooms').children)button.setAttribute('aria-checked',String(button.dataset.room===code));
- const room=ROOMS.find(r=>r.code===code);
+ const room=catalog.get(code)||ROOMS.find(r=>r.code===code);
  $('selected-title').textContent=room.title;
  $('selected-description').textContent=code==='BROADCAST'?'1 台控制台 · 最多 15 台收聽工作站':'部門獨立通訊 · 最多 15 人';
  $('broadcast-role').hidden=code!=='BROADCAST';
@@ -32,13 +55,35 @@ for(const room of ROOMS){
  const button=document.createElement('button');button.type='button';button.className='room-card';
  button.dataset.room=room.code;button.setAttribute('role','radio');
  button.setAttribute('aria-label',room.code+' '+room.title);
- for(const [tag,cls,text] of [['span','code',room.code],['strong','',room.title],['span','desc',room.description],['span','room-icon',room.icon]]){
+ for(const [tag,cls,text] of [['span','code',room.code],['strong','',room.title],['span','desc',room.code==='BROADCAST'?'單向廣播':'獨立通訊頻道'],['span','room-icon',room.icon],['span','occupancy','人數讀取中…']]){
   const el=document.createElement(tag);el.className=cls;el.textContent=text;button.append(el);
  }
  button.addEventListener('click',()=>choose(room.code));$('rooms').append(button);
 }
 $('rooms').setAttribute('role','radiogroup');$('rooms').setAttribute('aria-label','選擇房間');
 $('role').addEventListener('change',()=>{$('password').value='';updateRole();});choose('HK');
+async function refreshCatalog(){
+ if(state||document.hidden||catalogBusy)return;catalogBusy=true;
+ try{
+  const {data,error}=await client.rpc('talkroom_catalog');if(error)throw error;
+  if(state)return;
+  for(const room of data){
+   catalog.set(room.code,room);
+   const button=[...$('rooms').children].find(b=>b.dataset.room===room.code);if(!button)continue;
+   button.querySelector('strong').textContent=room.title;button.setAttribute('aria-label',room.code+' '+room.title);
+   const count=button.querySelector('.occupancy');
+   const full=room.code==='BROADCAST'?room.listeners>=room.capacity:room.online>=room.capacity;
+   count.classList.toggle('full',full);
+   count.textContent=room.code==='BROADCAST'
+    ?room.listeners+' / '+room.capacity+' 工作站 · 控制台 '+room.controllers
+    :room.online+' / '+room.capacity+' 人'+(full?' · 已滿':'');
+  }
+  if(!joining){const selectedRoom=catalog.get(selected);if(selectedRoom){$('selected-title').textContent=selectedRoom.title;$('join-button').textContent='進入'+selectedRoom.title+' →';}}
+  $('catalog-status').textContent='人數約每 10 秒更新；意外斷線最多約 1 分鐘後移除。';
+ }catch{$('catalog-status').textContent='目前無法更新人數；顯示可能已過期，加入時會由伺服器確認名額。';}
+ finally{catalogBusy=false;}
+}
+refreshCatalog();setInterval(refreshCatalog,10000);
 
 async function rpc(action,payload={},session=state?.session_id){
  const {data,error}=await client.rpc('talkroom_api',{p_action:action,p_session:session||null,p_payload:payload});
@@ -83,7 +128,7 @@ $('login-form').addEventListener('submit',async event=>{
   if(!authData.session){const {error}=await client.auth.signInAnonymously();if(error)throw error;}
   const peerId=await createPeer();
   const joined=await rpc('join',{room,role,username,password,peer_id:peerId},null);
-  state={...joined,username,peer_id:peerId};generation++;mic=false;speaker=true;peers=[];messagesKey='';
+  state={...joined,username,peer_id:peerId};generation++;mic=false;speaker=true;peers=[];messagesKey='';historyRevision=null;
   $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;
   $('room-title').textContent=joined.title;$('room-code').textContent=joined.room;
   $('broadcast-banner').hidden=joined.room!=='BROADCAST';
@@ -102,19 +147,20 @@ function updateControls(){
  $('mic-button').textContent=mic?'🎙 停止發話':'🎤 開啟麥克風';
  $('speaker-button').setAttribute('aria-pressed',String(speaker));
  $('speaker-button').textContent=speaker?'🔊 收聽開啟':'🔇 收聽關閉';
- $('voice-status').textContent=state?.role==='listener'?'收聽工作站 · 麥克風停用':mic?'正在向此房間發話':'麥克風已關閉 · 仍可收聽';
+ $('voice-status').textContent=state?.role==='listener'?'收聽工作站 · 麥克風停用':mic?'正在向此房間發話':'麥克風已關閉'+(speaker?' · 仍可收聽':' · 收聽已關閉');
 }
 function render(data){
  peers=data.peers;
  const list=$('user-list');list.replaceChildren();
  for(const p of peers){
-  const tag=document.createElement('div');tag.className='user-tag';
+  const tag=document.createElement('div');tag.className='user-tag '+(p.speaker?'listening':'not-listening');tag.dataset.session=p.id;
+  tag.title=(p.speaker?'收聽開啟':'收聽關閉')+'；黃色底表示偵測到聲音';
+  tag.setAttribute('aria-label',p.username+'，'+(p.speaker?'收聽開啟':'收聽關閉'));
   const name=document.createElement('span');name.textContent=p.username+(p.id===state.session_id?'（我）':'');
-  const desc=document.createElement('small');
-  desc.textContent=(p.role==='controller'?'控制台 · ':p.role==='listener'?'工作站 · ':'')+(p.mic?'發話中':'待命')+' · '+(p.speaker?'收聽開':'收聽關');
-  tag.append(name,desc);list.append(tag);
+  tag.append(name);list.append(tag);
  }
  $('member-count').textContent=state.room==='BROADCAST'?peers.filter(p=>p.role==='listener').length+' / 15 台工作站':peers.length+' / 15 人';
+ if(Array.isArray(data.messages)){
  const nextKey=data.messages.map(m=>m.id).join(',');
  if(nextKey!==messagesKey||!$('chat-win').children.length){
   const win=$('chat-win'),atBottom=win.scrollHeight-win.scrollTop-win.clientHeight<80;
@@ -125,6 +171,7 @@ function render(data){
   else for(const m of data.messages)win.append(messageNode(document,m,state.session_id));
   if(atBottom||!messagesKey)win.scrollTop=win.scrollHeight;
   messagesKey=nextKey;
+ }
  }
  if(state.room==='BROADCAST'){
   const controller=peers.find(p=>p.role==='controller');
@@ -139,9 +186,9 @@ function sync(){
  const current=state,epoch=generation;
  syncTask=(async()=>{
   try{
-   const data=await rpc('sync',{mic,speaker});
+   const data=await rpc('sync',{mic,speaker,latest_message_id:messagesKey.split(',').at(-1)||null,history_revision:historyRevision});
    if(state!==current||epoch!==generation)return;
-   lastSync=Date.now();render(data);
+   lastSync=Date.now();render(data);historyRevision=data.history_revision??null;
    status(peer?.disconnected?'資料已連線 · 語音重新連線中':'● 房間已連線 · '+current.username);
    for(const [id,entry] of incoming){
     if(!peers.some(p=>p.id===id&&p.mic))closeEntry(incoming,id,entry);
@@ -163,6 +210,7 @@ function sync(){
 }
 function closeEntry(map,id,entry){
  if(map.get(id)!==entry)return;map.delete(id);clearTimeout(entry.timeout);entry.audio?.remove();
+ if(map===incoming)removeMeter(id);
  try{entry.call.close();}catch{}
 }
 function watchCall(map,id,call){
@@ -201,6 +249,7 @@ async function acceptCall(call){
   call.on('stream',remote=>{
    if(epoch!==generation||incoming.get(result.sender)!==entry)return;
    clearTimeout(entry.timeout);
+   watchAudio(result.sender,remote);
    const audio=document.createElement('audio');audio.autoplay=true;audio.setAttribute('playsinline','');
    audio.srcObject=remote;audio.muted=!speaker;entry.audio=audio;$('audio-container').append(audio);
    audio.play().catch(()=>{$('resume-audio').hidden=false;});
@@ -223,6 +272,7 @@ $('mic-button').addEventListener('click',async()=>{
     const acquired=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
     if(epoch!==generation||!state){acquired.getTracks().forEach(t=>t.stop());return;}
     stream=acquired;
+    watchAudio(state.session_id,stream);
    }
    mic=true;stream.getAudioTracks().forEach(t=>t.enabled=true);updateControls();
   }
@@ -242,6 +292,7 @@ async function resumeAudio(){
  }catch{$('resume-audio').hidden=false;}
 }
 $('resume-audio').addEventListener('click',resumeAudio);
+$('message-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&!e.isComposing){e.preventDefault();if(!$('send-button').disabled)$('message-form').requestSubmit();}});
 $('message-form').addEventListener('submit',async event=>{
  event.preventDefault();if(!state||!canTransmit(state.role))return;
  const text=$('message-input').value.trim();if(!text)return;
@@ -253,12 +304,14 @@ async function leave(notify=true){
  const old=state;state=null;generation++;clearInterval(timer);timer=null;stopSending();
  for(const [id,entry] of incoming)closeEntry(incoming,id,entry);
  pending.clear();stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
+ for(const id of meters.keys())removeMeter(id);
  $('audio-container').replaceChildren();$('chat-win').replaceChildren();$('user-list').replaceChildren();
  $('room-screen').hidden=true;$('login-screen').hidden=false;$('password').value='';
  try{await wakeLock?.release();}catch{}wakeLock=null;
  if(notify)$('login-status').textContent='已退出，可選擇其他房間。';
  if(old)try{await rpc('leave',{},old.session_id);}catch(e){if(notify)$('login-status').textContent='已退出；伺服器會在一分鐘內更新離線狀態。';}
  if(notify&&!$('login-status').textContent)$('login-status').textContent='已退出，可選擇其他房間。';
+ refreshCatalog();
 }
 $('leave-button').addEventListener('click',()=>leave());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state){resumeAudio();requestWakeLock();sync().catch(report);}});

@@ -1,9 +1,25 @@
-# TalkRoom v2.0.0
+# TalkRoom v2.1.0
 
 Six password-protected rooms: HK, FD, SEC, FB, BROADCAST, LOBBY.
 Normal rooms allow 15 active devices. Broadcast allows one controller plus 15 listeners.
 Broadcast listeners use a separate password from the controller and never request microphone access.
 Homepage and in-room header display the version.
+
+## v2.1 administration and records
+
+`admin.html` uses separate Supabase Email/password authentication. Three owner-selected emails are allowlisted privately in the database; verified, non-anonymous accounts are required. Credentials and the allowlist are not embedded in the public frontend. Account activation is a separate owner step described in ADMIN-GUIDE.md.
+
+Administrators can rename rooms, rotate passwords and revoke all sessions in a room. Rotation and revocation share the room admission lock. Compliant online clients exit at their next successful sync; offline clients cannot rejoin with an expired session. An unchanged shared password still permits re-entry, so rotate it when revoking a departed employee's access.
+
+The public lobby RPC exposes room names and aggregate counts only, refreshed every 10 seconds. No identities, hashes, peer IDs or chat contents are exposed by the catalogue.
+
+Text and lifecycle searches support room, inclusive Taiwan calendar date range and literal keywords. AND/OR combines active filter groups; a separate AND/OR option combines keywords. Pages contain 100 records. CSV exports one database snapshot, up to 10,000 matching records, preserves newlines, and escapes spreadsheet formulas. Oversized results require narrower filters.
+
+Permanent text deletion always requires one room AND both dates. A five-minute, administrator-bound one-use preview stores the exact message IDs; new messages after preview are excluded. The operation records actor/scope/count and increments room history revision so clients refresh even when the latest message ID has not changed. Login/logout records are not deleted by this feature.
+
+Session triggers record login, explicit logout, revocation, reconnection and timeout estimates. Unexpected disconnects cannot provide an exact logout time: timeout events use last heartbeat + 60 seconds and are materialized when logs are searched, a session reconnects or expired sessions are cleaned. Events before this rollout are not reconstructed.
+
+The composer is multiline: Enter inserts a newline, Ctrl/Command+Enter sends. Microphone/listening controls share a row with right-aligned text settings. Member names are green/red for listening on/off; yellow backgrounds reflect local/received audio energy, not merely an enabled mic. Detection does not identify human speech versus background noise and is not audio recording.
 
 ## Architecture
 
@@ -25,16 +41,18 @@ Applied database/rooms-v2.sql, provisioned six room password hashes separately, 
 Original v1 tables and message records are preserved, but no longer accessible by browser roles. They are not mixed into the new rooms.
 Only the publishable legacy anon key belongs in config.js; this is not a database administrator credential.
 Room credentials are delivered separately to the owner, never committed.
-To rotate a room password, update its bcrypt hash in talkroom_private.rooms and revoke that room's sessions in the same administrative transaction.
-Controller and listener hashes are distinct. A password change alone does not revoke an existing session.
+Use the administration page to rotate room credentials and revoke sessions together. Controller and listener hashes remain distinct.
+
+Existing v2 upgrade order: database/admin-v2.1.sql, database/records-v2.1.sql, database/update-admission-v2.1.sql, database/refine-session-events-v2.1.sql. These are one-time scripts; do not rerun initialization on the live database. Provision admin_emails separately using the owner's approved addresses. No actual chat deletion is part of the upgrade.
 
 ## Validation and limitations
 
-Run npm test. database/test-rooms-v2.sql runs transactionally and rolls back all fixtures.
+Run npm test. database/test-rooms-v2.sql, database/test-admin-v2.1.sql and database/test-records-v2.1.sql run transactionally and roll back all fixtures.
 Tests cover passwords, ownership, cross-room isolation, capacity, broadcast roles, voice tickets and replay prevention.
 Browser UI verified for desktop/mobile layouts and actual listener login without a microphone prompt.
-Real iPhone/Android lock-screen playback and 15-device audio performance require on-site validation.
+Android lock-screen playback and 15-device audio performance require on-site validation. Android private APK preparation is in ANDROID-PLAN.md; no APK has been built yet.
 Current voice uses PeerJS P2P and STUN, with no TURN service configured; some networks may not connect.
 Screen Wake Lock is requested while visible where supported; browser background audio is not guaranteed.
 Supabase anonymous users persist independently of the expiring room sessions; administrators should monitor Auth usage.
 The standard Supabase leaked-password checker applies to Auth password accounts, not these custom shared room passwords.
+Security advisors still report private RLS tables with no policies (intentional default-deny; API-only access), old v1 anonymous policies (browser table grants have been revoked), and disabled Auth leaked-password protection. No new direct table access is granted.

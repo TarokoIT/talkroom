@@ -1,48 +1,3 @@
--- TalkRoom v2: private storage, authenticated RPC and room-scoped voice tickets.
--- Room credentials are provisioned separately and never committed.
-BEGIN;
-CREATE SCHEMA talkroom_private;
-REVOKE ALL ON SCHEMA talkroom_private FROM PUBLIC, anon, authenticated;
-GRANT USAGE ON SCHEMA talkroom_private TO authenticated;
-CREATE TABLE talkroom_private.rooms (
- code text PRIMARY KEY, title text NOT NULL, password_hash text NOT NULL,
- controller_hash text, capacity int NOT NULL DEFAULT 15, history_revision bigint NOT NULL DEFAULT 0
-);
-CREATE TABLE talkroom_private.sessions (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL,
- room text NOT NULL REFERENCES talkroom_private.rooms(code),
- username text NOT NULL CHECK(char_length(username) BETWEEN 1 AND 32),
- peer_id text NOT NULL UNIQUE, role text NOT NULL CHECK(role IN ('member','listener','controller')),
- offline_logged boolean NOT NULL DEFAULT false, mic boolean NOT NULL DEFAULT false, speaker boolean NOT NULL DEFAULT true,
- last_seen timestamptz NOT NULL DEFAULT now(),
- expires_at timestamptz NOT NULL DEFAULT now()+interval '16 hours', last_message_at timestamptz
-);
-CREATE INDEX sessions_room_seen ON talkroom_private.sessions(room,last_seen);
-CREATE INDEX sessions_user ON talkroom_private.sessions(user_id);
-CREATE TABLE talkroom_private.messages (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), room text NOT NULL REFERENCES talkroom_private.rooms(code),
- session_id uuid NOT NULL, username text NOT NULL,
- message text NOT NULL CHECK(char_length(message) BETWEEN 1 AND 2000),
- created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- name_color text NOT NULL DEFAULT '#1e90ff',text_color text NOT NULL DEFAULT '#2f3542',font_size text NOT NULL DEFAULT '17px'
-);
-CREATE INDEX messages_room_time ON talkroom_private.messages(room,created_at DESC,id);
-CREATE TABLE talkroom_private.join_attempts (
- user_id uuid PRIMARY KEY, started_at timestamptz NOT NULL DEFAULT now(), attempts int NOT NULL DEFAULT 0
-);
-CREATE TABLE talkroom_private.call_tickets (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- sender uuid NOT NULL REFERENCES talkroom_private.sessions(id) ON DELETE CASCADE,
- recipient uuid NOT NULL REFERENCES talkroom_private.sessions(id) ON DELETE CASCADE,
- expires_at timestamptz NOT NULL DEFAULT now()+interval '30 seconds', UNIQUE(sender,recipient)
-);
-ALTER TABLE talkroom_private.rooms ENABLE ROW LEVEL SECURITY;
-ALTER TABLE talkroom_private.sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE talkroom_private.messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE talkroom_private.join_attempts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE talkroom_private.call_tickets ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON ALL TABLES IN SCHEMA talkroom_private FROM PUBLIC,anon,authenticated;
-
 CREATE OR REPLACE FUNCTION talkroom_private.api(p_action text,p_session uuid,p_payload jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $$
@@ -172,11 +127,3 @@ BEGIN
  RAISE EXCEPTION '不支援的操作';
 END;
 $$;
-REVOKE ALL ON FUNCTION talkroom_private.api(text,uuid,jsonb) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION talkroom_private.api(text,uuid,jsonb) TO authenticated;
-CREATE FUNCTION public.talkroom_api(p_action text,p_session uuid DEFAULT NULL,p_payload jsonb DEFAULT '{}'::jsonb)
-RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path=''
-AS $$ SELECT talkroom_private.api(p_action,p_session,p_payload); $$;
-REVOKE ALL ON FUNCTION public.talkroom_api(text,uuid,jsonb) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.talkroom_api(text,uuid,jsonb) TO authenticated;
-COMMIT;

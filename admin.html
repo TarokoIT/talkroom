@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TalkRoom｜管理後台</title>
+<link rel="stylesheet" href="styles.css"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js"></script></head>
+<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">v2.1.0</span></header>
+<p><a href="./">← 返回通訊首頁</a></p>
+<section id="admin-login" class="entry-panel"><h1>管理員登入</h1><p>使用已驗證且獲授權的管理員 Email。房間密碼不能登入後台。</p>
+<form id="admin-login-form"><label for="admin-email">Email</label><input id="admin-email" type="email" autocomplete="username" required>
+<label for="admin-password">管理員密碼</label><input id="admin-password" type="password" autocomplete="current-password" minlength="12" required>
+<p><button class="primary" id="admin-signin">登入後台</button> <button class="secondary" id="admin-register" type="button">首次建立帳號</button></p></form>
+<p class="hint">首次建立後，請到信箱驗證 Email，再回來登入。建立帳號不會自動取得管理權限。</p></section>
+<p id="admin-status" role="status" aria-live="polite"></p>
+<section id="admin-panel" hidden><div class="header-actions"><button id="admin-refresh" class="secondary">重新整理</button><button id="admin-signout" class="secondary">登出</button></div>
+<p class="hint">更改任一房間密碼會撤銷該房全部登入，包括廣播控制台與工作站。正常連線裝置會在下次同步時退出；員工須使用新密碼重新加入。</p>
+<div id="admin-rooms" class="admin-grid"></div>
+<section class="entry-panel records-panel"><h2>記錄搜尋與匯出</h2>
+<p class="hint">日期使用台灣時間，包含結束日整天。登入登出紀錄從 v2.1 啟用後累積；逾時離線為最後連線後 60 秒的推估時間。每頁 100 筆，匯出最多 10,000 筆。</p>
+<form id="search-form"><div class="filter-grid">
+<label>記錄種類<select id="search-kind"><option value="messages">文字對話</option><option value="events">登入／登出</option></select></label>
+<label>房間<select id="search-room"><option value="">全部房間</option></select></label>
+<label>開始日期<input id="search-from" type="date"></label><label>結束日期<input id="search-to" type="date"></label>
+<label>條件組合<select id="search-mode"><option value="AND">AND：所有已填條件</option><option value="OR">OR：任一已填條件</option></select></label>
+<label>關鍵字符合<select id="keyword-mode"><option value="AND">AND：全部關鍵字</option><option value="OR">OR：任一關鍵字</option></select></label>
+</div><label>關鍵字（以逗號分隔，最多 10 個；搜尋姓名與內容）<input id="search-keywords" placeholder="例如：毛巾,301"></label>
+<p class="hint">「條件組合」連接房間、日期區間及關鍵字三組條件。選 OR 時，符合任一組就列出，結果可能包含其他房間或日期。留空的條件不參與比較。</p>
+<div class="record-actions"><button class="primary" id="search-button">搜尋</button><button class="secondary" type="button" id="export-button">匯出目前條件 CSV</button></div></form>
+<p id="search-status" role="status"></p><div class="table-scroll"><table class="records-table"><thead><tr><th>時間（台灣）</th><th>房間</th><th>姓名</th><th>內容／事件</th></tr></thead><tbody id="search-results"></tbody></table></div>
+<div class="record-actions"><button id="search-prev" class="secondary" disabled>上一頁</button><button id="search-next" class="secondary" disabled>下一頁</button></div>
+</section>
+<section class="entry-panel records-panel"><h2>清除文字記錄</h2><p class="admin-warning">永久清除「指定房間 AND 指定日期區間」的文字對話，不清除登入登出紀錄。請先匯出需要保留的資料。搜尋區的 OR／關鍵字不適用於此功能。</p>
+<form id="delete-form"><div class="filter-grid"><label>指定房間<select id="delete-room" required><option value="">請選擇一個房間</option></select></label><label>開始日期<input id="delete-from" type="date" required></label><label>結束日期<input id="delete-to" type="date" required></label></div>
+<div class="record-actions"><button class="secondary" id="delete-preview">預覽清除筆數</button><button class="danger" type="button" id="delete-confirm" disabled>確認永久清除</button></div></form><p id="delete-status" role="status"></p></section>
+</section></main></body></html>
