@@ -1,0 +1,1 @@
+export const CONFIG = {"url": "https://zfnzhrcuwfejytftptio.supabase.co", "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmbnpocmN1d2Zlanl0ZnRwdGlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyOTIyMDIsImV4cCI6MjA5Mzg2ODIwMn0.ZjMu3B_ODgYEos3ayUksxunkU5vhaxn62Ya_Z4-7xiY"};
