@@ -1,0 +1,12 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+DROP POLICY IF EXISTS "允許刪除所有訊息" ON public.chat_messages;
+DROP POLICY IF EXISTS "Enable insert for all" ON public.chat_messages;
+DROP POLICY IF EXISTS "Enable read for all" ON public.chat_messages;
+REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.chat_messages FROM PUBLIC, anon, authenticated;
+REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.user_activity_log FROM PUBLIC, anon, authenticated;
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON public.users_online FROM PUBLIC, anon, authenticated;
+ALTER FUNCTION public.cleanup_offline_users() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.update_users_online_timestamp() SET search_path = pg_catalog, public;
+REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+COMMIT;

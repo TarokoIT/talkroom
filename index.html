@@ -493,7 +493,7 @@
         if (!myName || !myPeerId) return;
 
         try {
-            await client
+            const { error } = await client
                 .from('users_online')
                 .upsert({
                     username: myName,
@@ -505,6 +505,7 @@
                     onConflict: 'peer_id'
                 });
 
+            if (error) throw error;
             console.log('✓ 已更新在線狀態');
         } catch(e) {
             console.error('更新在線狀態失敗:', e);
@@ -565,8 +566,8 @@
 
             div.innerHTML = `
                 <span class="u-name-label">
-                    ${u.username}
-                    ${u.username === myName ? '(我)' : ''}
+                    ${escapeHtml(u.username)}
+                    ${u.peer_id === myPeerId ? '(我)' : ''}
                 </span>
 
                 <div class="u-status-label">
@@ -599,10 +600,7 @@
 
             // 檢查是否為管理員刪除指令
             if (text === "admin delete all") {
-                const confirmed = confirm("確認要刪除所有對話紀錄嗎？此操作無法復原！");
-                if (confirmed) {
-                    await deleteAllMessages();
-                }
+                alert("前端清除全部紀錄功能已停用。");
                 input.value = "";
                 return;
             }
@@ -628,22 +626,20 @@
         }
     }
 
-    // 刪除所有對話紀錄的函數
+    // 舊版入口保留為停用提示，管理操作不從匿名前端執行。
     async function deleteAllMessages() {
-        try {
-            const { error } = await client.from('chat_messages').delete().not('id', 'is', null);
-            if (error) {
-                console.error('刪除失敗:', error);
-                alert("刪除失敗：" + error.message);
-            } else {
-                console.log('所有對話紀錄已刪除');
-                alert("✓ 所有對話紀錄已成功刪除");
-                document.getElementById('chat-win').innerHTML = "";
-            }
-        } catch (e) {
-            console.error('刪除過程中發生錯誤:', e);
-            alert("刪除過程中發生錯誤：" + e.message);
-        }
+        alert("前端清除全部紀錄功能已停用。");
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;',
+            '"': '&quot;', "'": '&#39;'
+        }[char]));
+    }
+
+    function safeColor(value, fallback) {
+        return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
     }
 
     function renderMsg(data) {
@@ -671,18 +667,22 @@
         
         div.innerHTML = `
             <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
-                <span class="u-name" style="color:${data.name_color}">${data.username}</span>
+                <span class="u-name" style="color:${safeColor(data.name_color, '#1e90ff')}">${escapeHtml(data.username)}</span>
                 ${timeStr ? `<span style="font-size: 10px; color: #999; opacity: 0.7;">${timeStr}</span>` : ''}
             </div>
-            <div style="color:${data.text_color}; font-size:${data.font_size}">${data.message}</div>
+            <div style="color:${safeColor(data.text_color, '#2f3542')}; font-size:${['14px', '17px', '22px'].includes(data.font_size) ? data.font_size : '17px'}; white-space:pre-wrap; overflow-wrap:anywhere">${escapeHtml(data.message)}</div>
         `;
         win.appendChild(div);
         win.scrollTop = win.scrollHeight;
     }
 
     async function loadHistory() {
-        const { data } = await client.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(30);
-        if(data) data.forEach(renderMsg);
+        const { data, error } = await client.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(30);
+        if (error) {
+            console.error('讀取歷史訊息失敗:', error);
+            return;
+        }
+        if(data) data.reverse().forEach(renderMsg);
     }
 
     function makeCall(peerId) {
@@ -746,6 +746,7 @@
     }
 
     function toggleMic() {
+        if (isExiting || !myStream?.getAudioTracks().length) return;
         isMic = !isMic;
         myStream.getAudioTracks()[0].enabled = isMic;
         document.getElementById('mic-btn').className = isMic ? "control-btn on" : "control-btn";
@@ -756,12 +757,7 @@
         if(isMic) {
             console.log('麥克風開啟，發起通話');
             setTimeout(() => initiateCalls(), 300);
-        } else {
-            console.log('麥克風關閉，結束所有通話');
-            activeCalls.forEach(call => call.close());
-            activeCalls.clear();
-            remoteStreams.clear();
-        }
+        } // 關麥只停用本地音軌，保留雙向連線以持續收聽。
     }
 
     function toggleSpk() {
@@ -790,7 +786,7 @@
     }
 
     function playDingDing() {
-        if(!audioCtx) return;
+        if(!audioCtx || !isSpk || isExiting) return;
         
         if(audioCtx.state === 'suspended') {
             audioCtx.resume().catch(e => console.error('AudioContext 恢復失敗:', e));
@@ -901,11 +897,11 @@
         }
     });
 
-    // 頁面隱藏時清理
+    // 不主動暫停背景音訊；回到前景時重新嘗試播放。
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            document.querySelectorAll('audio').forEach(a => a.pause());
-        } else {
+        if (!document.hidden && !isExiting) {
+            updateOnlineStatus();
+            loadOnlineUsers();
             document.querySelectorAll('audio').forEach(a => {
                 if (!a.muted) {
                     a.play().catch(() => {});
