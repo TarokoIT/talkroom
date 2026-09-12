@@ -69,3 +69,11 @@ Restored ordinary-room duplex capture/answer/playback and the third STUN endpoin
 Removed the remaining ticket/accept RPC waits and ticket metadata requirement from the media path. Kept the original PeerJS 1.5.2 and three STUN endpoints, prepared microphone and immediate answer. Room, admin, records, composer and channel labels are preserved. All devices must exit and reload together: old clients require ticket metadata and cannot accept this client's direct offers. Browser synthetic-audio testing cannot certify physical phone/PC connectivity.
 
 Validation for v2.1.3: 11 committed Node tests pass. Two actual app instances with a mock room API, real PeerJS signaling and synthetic microphone audio passed simultaneous duplex send/receive, mute/unmute retention, leave cleanup, and broadcast receive-only/stop tests. No physical handset or 4G test was available to the agent.
+
+## Seventh-room candidate experiment
+
+candidate.html / candidate-app.js / candidate-core.js are isolated from the six-room production app. VOICE_TEST is a seventh private.rooms row, separately password-provisioned, capacity 15. Existing Auth, join/sync APIs and server room filtering apply. No schema, grants, RLS or production room credentials were changed. The homepage only adds a link. Existing admin APIs can manage this room; its internal code may appear as VOICE_TEST in administration.
+
+Candidate media uses one active call map, immediate answer after the same recent-room-roster gate, microphone-off closes calls, and speaker mute depends only on the listener control. Removed the production collision arbitration and 45-second call watchdog for this comparison. Calls are still removed when the authenticated roster excludes a member or session authorization fails. This is a diagnostic candidate, not a rollout to the six rooms; it does not claim every remaining failure has been identified. Diagnostics are local-only without IPs, passwords, names, message contents or audio recording. The agent can use synthetic audio; normal users use microphone input.
+
+SQL rollback validation passed wrong-password denial, correct-password admission, cross-room roster isolation and cross-session ownership rejection. No SQL test fixtures were retained. Manual phone/PC verification in this candidate remains required.

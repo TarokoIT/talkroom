@@ -8,28 +8,28 @@
  <link rel="stylesheet" href="styles.css">
  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
  <script defer src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
- <script type="module" src="app.js?v=2.1.3"></script>
+ <script type="module" src="candidate-app.js?v=1"></script>
 </head>
 <body>
  <main id="login-screen" class="lobby">
-  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.1.3</span></header>
-  <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>選擇頻道，開始通訊。</h1><p>部門對講與工作站廣播，讓每一句話到達對的人。</p></div>
+  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">候選測試 1</span></header>
+  <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>第七房 · 語音測試</h1><p>正式房間驗證＋原始語音流程；測試資料與其他六房分開。</p></div>
   <form id="login-form" class="login-layout">
    <fieldset class="room-section"><legend>01　選擇房間</legend><div id="rooms" class="room-grid"></div><p id="catalog-status" class="catalog-note" role="status"></p></fieldset>
    <section class="entry-panel">
     <span class="eyebrow">READY TO CONNECT</span><h2 id="selected-title">房務部</h2><p id="selected-description">部門獨立通訊 · 最多 15 人</p>
     <div id="broadcast-role" hidden><label for="role">使用方式</label><select id="role"><option value="listener">收聽工作站</option><option value="controller">廣播控制台</option></select><p id="role-description" class="hint">只接收廣播，不需要麥克風。</p></div>
-    <label for="nickname">顯示名稱</label><input id="nickname" autocomplete="nickname" maxlength="32" placeholder="例如：MIS、房務 01" required>
+    <label for="candidate-source">音源</label><select id="candidate-source"><option value="mic">實際麥克風</option><option value="tone">循環音階（助理測試用）</option></select><label for="nickname">顯示名稱</label><input id="nickname" autocomplete="nickname" maxlength="32" placeholder="例如：MIS、房務 01" required>
     <label for="password" id="password-label">房間密碼</label><input id="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="輸入此房間的密碼" required>
     <button id="join-button" class="primary" type="submit">進入房務部 <span aria-hidden="true">→</span></button>
     <p id="login-status" role="status" aria-live="polite" class="status-text"></p>
     <p class="privacy-note">每個房間的訊息與語音獨立。廣播只傳送至廣播頻道。</p>
    </section>
   </form>
-  <p style="text-align:center"><a href="candidate.html">🧪 第七房：語音測試（候選版）</a></p><footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.1.3 · 2026.09.12</span></footer>
+  <footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 候選測試 1 · 2026.09.12</span></footer>
  </main>
  <main id="room-screen" class="room-screen" hidden>
-  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.1.3</span><button id="leave-button" class="secondary">退出房間</button></div></header>
+  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">候選測試 1</span><button id="leave-button" class="secondary">退出房間</button></div></header>
   <div class="connection-bar"><span id="connection-status" role="status" aria-live="polite">正在連線…</span><button id="resume-audio" class="secondary" hidden>點此啟用收聽</button></div>
   <section id="broadcast-banner" class="broadcast-banner" hidden><span class="broadcast-icon" aria-hidden="true">◉</span><div><strong id="broadcast-state">等待控制台</strong><p id="broadcast-detail">此工作站只接收廣播頻道音訊。</p></div></section>
   <section class="presence"><div class="section-label"><span>房間成員</span><span id="member-count"></span></div><div id="user-list" class="user-list"></div></section>
@@ -42,5 +42,5 @@
   </footer>
  </main>
  <div id="audio-container" hidden></div>
-</body>
+<details style="position:fixed;bottom:0;right:0;z-index:1000;max-width:90vw;background:white;border:1px solid #aaa;padding:8px"><summary>語音診斷（不錄音）</summary><button id="diagnostic-export">匯出診斷</button><pre id="diagnostic-stats" style="max-height:25vh;overflow:auto"></pre><pre id="diagnostic-log" style="max-height:25vh;overflow:auto"></pre></details></body>
 </html>
