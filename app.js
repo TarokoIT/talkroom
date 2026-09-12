@@ -1,6 +1,6 @@
 import {CONFIG} from './config.js';
-import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode} from './core.js';
-import {isVoiceConnected,voiceFailure,shouldPruneIncoming} from './voice-core.js';
+import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.1.2';
+import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing} from './voice-core.js?v=2.1.2';
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
  auth:{storage:window.sessionStorage,storageKey:'talkroom-auth-v2'},
@@ -55,8 +55,8 @@ function updateRole(){
 for(const room of ROOMS){
  const button=document.createElement('button');button.type='button';button.className='room-card';
  button.dataset.room=room.code;button.setAttribute('role','radio');
- button.setAttribute('aria-label',room.code+' '+room.title);
- for(const [tag,cls,text] of [['span','code',room.code],['strong','',room.title],['span','desc',room.code==='BROADCAST'?'單向廣播':'獨立通訊頻道'],['span','room-icon',room.icon],['span','occupancy','人數讀取中…']]){
+ button.setAttribute('aria-label',channelLabel(room.code)+' '+room.title);
+ for(const [tag,cls,text] of [['span','code',channelLabel(room.code)],['strong','',room.title],['span','desc',room.code==='BROADCAST'?'單向廣播':'獨立通訊頻道'],['span','room-icon',room.icon],['span','occupancy','人數讀取中…']]){
   const el=document.createElement(tag);el.className=cls;el.textContent=text;button.append(el);
  }
  button.addEventListener('click',()=>choose(room.code));$('rooms').append(button);
@@ -71,7 +71,7 @@ async function refreshCatalog(){
   for(const room of data){
    catalog.set(room.code,room);
    const button=[...$('rooms').children].find(b=>b.dataset.room===room.code);if(!button)continue;
-   button.querySelector('strong').textContent=room.title;button.setAttribute('aria-label',room.code+' '+room.title);
+   button.querySelector('strong').textContent=room.title;button.setAttribute('aria-label',channelLabel(room.code)+' '+room.title);
    const count=button.querySelector('.occupancy');
    const full=room.code==='BROADCAST'?room.listeners>=room.capacity:room.online>=room.capacity;
    count.classList.toggle('full',full);
@@ -94,7 +94,7 @@ async function rpc(action,payload={},session=state?.session_id){
 }
 function createPeer(){
  return new Promise((resolve,reject)=>{
-  const instance=new window.Peer({config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}});
+  const instance=new window.Peer({config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]}});
   peer=instance;
   const timeout=setTimeout(()=>{instance.destroy();reject(new Error('語音服務連線逾時，請再試一次'));},15000);
   instance.once('open',id=>{clearTimeout(timeout);resolve(id);});
@@ -125,13 +125,20 @@ $('login-form').addEventListener('submit',async event=>{
  const room=selected,role=roleFor(room,$('role').value),username=$('nickname').value.trim(),password=$('password').value;
  try{
   await unlockAudio();
+  // Restore the original duplex setup: prepare a muted microphone before joining.
+  // Broadcast listeners remain receive-only and never request microphone access.
+  if(role==='member'){
+   stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+   stream.getAudioTracks().forEach(track=>track.enabled=false);
+  }
   const {data:authData,error:authError}=await client.auth.getSession();if(authError)throw authError;
   if(!authData.session){const {error}=await client.auth.signInAnonymously();if(error)throw error;}
   const peerId=await createPeer();
   const joined=await rpc('join',{room,role,username,password,peer_id:peerId},null);
   state={...joined,username,peer_id:peerId};generation++;mic=false;speaker=true;peers=[];messagesKey='';historyRevision=null;
   $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;
-  $('room-title').textContent=joined.title;$('room-code').textContent=joined.room;
+  if(stream)watchAudio(state.session_id,stream);
+  $('room-title').textContent=joined.title;$('room-code').textContent=channelLabel(joined.room);
   $('broadcast-banner').hidden=joined.room!=='BROADCAST';
   $('mic-button').hidden=!canTransmit(joined.role);$('message-form').hidden=joined.role==='listener';
   $('text-tools').hidden=joined.role==='listener';
@@ -140,6 +147,7 @@ $('login-form').addEventListener('submit',async event=>{
  }catch(e){
   if(state)await leave(false);
   peer?.destroy();peer=null;
+  stream?.getTracks().forEach(track=>track.stop());stream=null;
   $('login-status').textContent=errorText(e);
  }finally{joining=false;$('join-button').disabled=false;}
 });
@@ -153,11 +161,17 @@ function updateControls(){
 }
 function updateVoiceStatus(){
  if(!state)return;
- const sending=[...outgoing.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length;
- const receiving=[...incoming.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length;
+ const connected=[...outgoing.values(),...incoming.values()].filter(e=>isVoiceConnected(e.call.peerConnection));
+ const sending=state.room==='BROADCAST'?[...outgoing.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length:connected.length;
+ const receiving=state.room==='BROADCAST'?[...incoming.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length:connected.length;
  const targets=canTransmit(state.role)?voiceTargets(peers,state).length:0;
  $('voice-status').textContent=(mic?'麥克風已開啟 · 語音接通 '+sending+'/'+targets+' 台':'麥克風已關閉')+
   (speaker?' · 收聽連線 '+receiving+' 台':' · 收聽已關閉');
+}
+function updateRemoteMute(){
+ for(const map of [outgoing,incoming])for(const [id,entry] of map){
+  if(entry.audio)entry.audio.muted=!speaker||!peers.some(p=>p.id===id&&p.mic);
+ }
 }
 function render(data){
  peers=data.peers;
@@ -199,9 +213,10 @@ function sync(){
    const data=await rpc('sync',{mic,speaker,latest_message_id:messagesKey.split(',').at(-1)||null,history_revision:historyRevision});
    if(state!==current||epoch!==generation)return;
    lastSync=Date.now();render(data);historyRevision=data.history_revision??null;
+   updateRemoteMute();
    status(peer?.disconnected?'資料已連線 · 語音重新連線中':'● 房間已連線 · '+current.username);
    for(const [id,entry] of incoming){
-    if(shouldPruneIncoming(peers,id,entry.acceptedAt,snapshotStartedAt))closeEntry(incoming,id,entry);
+    if(shouldPruneIncoming(peers,id,entry.acceptedAt,snapshotStartedAt,current.room!=='BROADCAST'))closeEntry(incoming,id,entry);
    }
    for(const [id,entry] of outgoing){
     if(!peers.some(p=>p.id===id))closeEntry(outgoing,id,entry);
@@ -211,7 +226,7 @@ function sync(){
   }catch(e){
    if(state!==current)return;
    status('連線中斷，正在重試…');
-   if(Date.now()-lastSync>10000){stopSending();for(const [id,entry] of incoming)closeEntry(incoming,id,entry);}
+   if(Date.now()-lastSync>10000){stopSending();for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);}
    if(e.code==='42501'||errorText(e).includes('房間已滿')){
     await leave(false);$('login-status').textContent=errorText(e);
    }else report(e);
@@ -221,7 +236,7 @@ function sync(){
 }
 function closeEntry(map,id,entry){
  if(map.get(id)!==entry)return;map.delete(id);clearTimeout(entry.timeout);entry.audio?.remove();
- if(map===incoming)removeMeter(id);
+ if(entry.audio)removeMeter(id);
  try{entry.call.close();}catch{}
 }
 function watchCall(map,id,call){
@@ -238,19 +253,19 @@ function watchCall(map,id,call){
   if(!isVoiceConnected(pc)){
    const reason=voiceFailure(pc);cleanup();report(reason);updateVoiceStatus();
   }
- },20000);
+ },45000);
  return entry;
 }
 async function startCall(dest,epoch){
- if(outgoing.has(dest.id)||pending.has(dest.id)||!mic||peer?.disconnected)return;
+ if(outgoing.has(dest.id)||(state?.room!=='BROADCAST'&&incoming.has(dest.id))||pending.has(dest.id)||!mic||peer?.disconnected)return;
  pending.add(dest.id);
  try{
   const ticket=await rpc('ticket',{recipient:dest.id});
-  if(epoch!==generation||!state||!mic)return;
+  if(epoch!==generation||!state||!mic||(state.room!=='BROADCAST'&&incoming.has(dest.id)))return;
   const call=peer.call(ticket.peer_id,stream,{metadata:{ticket:ticket.ticket,version:2}});
   if(!call)throw new Error('無法建立語音連線');
-  watchCall(outgoing,dest.id,call);
-  // Send-only: never play a remote stream returned on an outgoing connection.
+  const entry=watchCall(outgoing,dest.id,call);
+  if(state.room!=='BROADCAST')attachRemoteAudio(outgoing,dest.id,entry,epoch);
  }catch(e){if(epoch===generation&&state)report(e);}
  finally{pending.delete(dest.id);}
 }
@@ -260,22 +275,33 @@ async function acceptCall(call){
  try{
   const result=await rpc('accept',{ticket:call.metadata.ticket,peer_id:call.peer});
   if(epoch!==generation||!state){call.close();return;}
+  if(state.room!=='BROADCAST'){
+   const existing=outgoing.get(result.sender);
+   if(existing){
+    // Simultaneous offers converge to one shared duplex call instead of duplicate audio.
+    if(preferOutgoing(state.session_id,result.sender)){call.close();return;}
+    closeEntry(outgoing,result.sender,existing);
+   }
+  }
   const old=incoming.get(result.sender);if(old)closeEntry(incoming,result.sender,old);
   const entry=watchCall(incoming,result.sender,call);
-  call.on('stream',remote=>{
-   if(epoch!==generation||incoming.get(result.sender)!==entry)return;
+  attachRemoteAudio(incoming,result.sender,entry,epoch);
+  call.answer(state.room==='BROADCAST'?undefined:stream);
+ }catch(e){call.close();if(epoch===generation&&state)report('語音邀請驗證未通過：'+errorText(e));}
+}
+function attachRemoteAudio(map,id,entry,epoch){
+  entry.call.on('stream',remote=>{
+   if(epoch!==generation||map.get(id)!==entry)return;
    // A remote track can arrive before ICE connects; keep the connection watchdog running.
-   watchAudio(result.sender,remote);
+   entry.audio?.remove();watchAudio(id,remote);
    const audio=document.createElement('audio');audio.autoplay=true;audio.setAttribute('playsinline','');
-   audio.srcObject=remote;audio.muted=!speaker;entry.audio=audio;$('audio-container').append(audio);
+   audio.srcObject=remote;entry.audio=audio;updateRemoteMute();$('audio-container').append(audio);
    audio.play().catch(()=>{$('resume-audio').hidden=false;});
   });
-  call.answer(); // One-way receive: listeners never return a microphone stream.
- }catch(e){call.close();if(epoch===generation&&state)report('語音邀請驗證未通過：'+errorText(e));}
 }
 function stopSending(){
  mic=false;if(stream)for(const track of stream.getAudioTracks())track.enabled=false;
- for(const [id,entry] of outgoing)closeEntry(outgoing,id,entry);
+ if(state?.room==='BROADCAST')for(const [id,entry] of outgoing)closeEntry(outgoing,id,entry);
  updateControls();
 }
 $('mic-button').addEventListener('click',async()=>{
@@ -297,7 +323,7 @@ $('mic-button').addEventListener('click',async()=>{
  finally{micBusy=false;$('mic-button').disabled=false;}
 });
 $('speaker-button').addEventListener('click',()=>{
- speaker=!speaker;for(const audio of $('audio-container').children)audio.muted=!speaker;
+ speaker=!speaker;updateRemoteMute();
  updateControls();if(speaker)resumeAudio();sync().catch(report);
 });
 async function resumeAudio(){
@@ -318,7 +344,7 @@ $('message-form').addEventListener('submit',async event=>{
 });
 async function leave(notify=true){
  const old=state;state=null;generation++;clearInterval(timer);timer=null;stopSending();
- for(const [id,entry] of incoming)closeEntry(incoming,id,entry);
+ for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);
  pending.clear();stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
  for(const id of meters.keys())removeMeter(id);
  $('audio-container').replaceChildren();$('chat-win').replaceChildren();$('user-list').replaceChildren();

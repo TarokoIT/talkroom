@@ -1,3 +1,4 @@
+import {channelLabel} from './core.js?v=2.1.2';
 import {CONFIG} from './config.js';
 import {keywordsFrom,recordsCsv} from './records-core.js';
 const $=id=>document.getElementById(id);
@@ -19,11 +20,11 @@ async function load(){
  const data=await api('list');$('admin-login').hidden=true;$('admin-panel').hidden=false;$('admin-rooms').replaceChildren();
  for(const id of ['search-room','delete-room']){
   const select=$(id),value=select.value;select.replaceChildren(new Option(id==='search-room'?'全部房間':'請選擇一個房間',''));
-  for(const room of data.rooms)select.add(new Option(room.title+' ('+room.code+')',room.code));select.value=value;
+  for(const room of data.rooms)select.add(new Option(room.title+' ('+channelLabel(room.code)+')',room.code));select.value=value;
  }
  for(const room of data.rooms){
   const form=document.createElement('form');form.className='entry-panel';
-  const title=document.createElement('h2');title.textContent=room.code;
+  const title=document.createElement('h2');title.textContent=channelLabel(room.code);
   const count=document.createElement('p');count.className='hint';count.textContent='目前 '+room.online+' 台裝置在線';
   const name=field('房間名稱','text',room.title),password=field(room.code==='BROADCAST'?'新的收聽密碼（空白表示不變）':'新房間密碼（空白表示不變）','password');
   form.append(title,count,name.wrapper,password.wrapper);
@@ -88,7 +89,7 @@ async function search(offset=0,newFilter=null){
   const filter=newFilter||searchFilter||filters(),result=await records('search',{...filter,offset});
   searchFilter=filter;searchOffset=offset;searchTotal=result.total;$('search-results').replaceChildren();
   for(const row of result.rows){
-   const tr=document.createElement('tr');for(const value of [new Date(row.created_at).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}),row.room_title+' ('+row.room+')',row.username,row.content]){
+   const tr=document.createElement('tr');for(const value of [new Date(row.created_at).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}),row.room_title+' ('+channelLabel(row.room)+')',row.username,row.content]){
     const td=document.createElement('td');td.textContent=value;tr.append(td);
    }$('search-results').append(tr);
   }
@@ -117,13 +118,13 @@ $('delete-form').addEventListener('submit',async e=>{
   const result=await records('delete_preview',filter);
   // Ignore a preview if the operator edited its scope while the request was pending.
   if(filter.room!==$('delete-room').value||filter.from!==$('delete-from').value||filter.to!==$('delete-to').value)return;
-  deletePreview={...result,...filter};$('delete-status').textContent=filter.room+'，'+filter.from+' 至 '+filter.to+'：將永久清除 '+result.count+' 筆文字記錄。預覽有效 5 分鐘。';
+  deletePreview={...result,...filter};$('delete-status').textContent=channelLabel(filter.room)+'，'+filter.from+' 至 '+filter.to+'：將永久清除 '+result.count+' 筆文字記錄。預覽有效 5 分鐘。';
  }catch(error){$('delete-status').textContent=error.message;}finally{lockRecords(false);}
 });
 $('delete-confirm').addEventListener('click',async()=>{
  if(recordsBusy||!deletePreview||!deletePreview.count)return;
  const preview=deletePreview;
- if(!confirm('永久清除 '+preview.room+' 房間，'+preview.from+' 至 '+preview.to+' 的 '+preview.count+' 筆文字記錄？此動作無法復原。'))return;
+ if(!confirm('永久清除 '+channelLabel(preview.room)+'，'+preview.from+' 至 '+preview.to+' 的 '+preview.count+' 筆文字記錄？此動作無法復原。'))return;
  lockRecords(true);
  try{
   const result=await records('delete_confirm',{token:preview.token});invalidatePreview();

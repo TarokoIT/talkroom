@@ -8,11 +8,11 @@
  <link rel="stylesheet" href="styles.css">
  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
  <script defer src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
- <script type="module" src="app.js?v=2.1.1"></script>
+ <script type="module" src="app.js?v=2.1.2"></script>
 </head>
 <body>
  <main id="login-screen" class="lobby">
-  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.1.1</span></header>
+  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.1.2</span></header>
   <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>選擇頻道，開始通訊。</h1><p>部門對講與工作站廣播，讓每一句話到達對的人。</p></div>
   <form id="login-form" class="login-layout">
    <fieldset class="room-section"><legend>01　選擇房間</legend><div id="rooms" class="room-grid"></div><p id="catalog-status" class="catalog-note" role="status"></p></fieldset>
@@ -26,10 +26,10 @@
     <p class="privacy-note">每個房間的訊息與語音獨立。廣播只傳送至廣播頻道。</p>
    </section>
   </form>
-  <footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.1.1 · 2026.09.12</span></footer>
+  <footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.1.2 · 2026.09.12</span></footer>
  </main>
  <main id="room-screen" class="room-screen" hidden>
-  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.1.1</span><button id="leave-button" class="secondary">退出房間</button></div></header>
+  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.1.2</span><button id="leave-button" class="secondary">退出房間</button></div></header>
   <div class="connection-bar"><span id="connection-status" role="status" aria-live="polite">正在連線…</span><button id="resume-audio" class="secondary" hidden>點此啟用收聽</button></div>
   <section id="broadcast-banner" class="broadcast-banner" hidden><span class="broadcast-icon" aria-hidden="true">◉</span><div><strong id="broadcast-state">等待控制台</strong><p id="broadcast-detail">此工作站只接收廣播頻道音訊。</p></div></section>
   <section class="presence"><div class="section-label"><span>房間成員</span><span id="member-count"></span></div><div id="user-list" class="user-list"></div></section>

@@ -1,4 +1,4 @@
-# TalkRoom v2.1.1
+# TalkRoom v2.1.2
 
 Six password-protected rooms: HK, FD, SEC, FB, BROADCAST, LOBBY.
 Normal rooms allow 15 active devices. Broadcast allows one controller plus 15 listeners.
@@ -30,10 +30,10 @@ The API derives the room, name and role from the server session; clients cannot 
 Room snapshots poll every two seconds; offline presence expires after 60 seconds and sessions expire after 16 hours.
 Join attempts are limited to 10/minute per authenticated identity, in addition to Supabase anonymous-signup rate limits.
 
-PeerJS streams are one-way. Each outgoing call requires a 30-second single-use server ticket tied to sender and recipient in the same room.
-Receivers validate the ticket before answering without an outgoing stream. Outgoing calls never play a returned remote stream.
-The backend denies listener transmission and cross-room tickets. Room snapshots remove calls from offline or no-longer-speaking senders.
-Closing the mic closes outgoing calls only, preserving incoming audio.
+Normal rooms use the earlier duplex PeerJS audio architecture: a muted microphone is prepared on entry, one shared call carries both directions, and muting preserves the call. Broadcast remains one-way and listeners never return a microphone stream. Each newly initiated call requires a 30-second single-use server ticket tied to sender and recipient in the same room.
+Receivers validate the ticket before answering. Normal members answer with their prepared microphone stream and play audio arriving on either an outgoing or incoming call. Broadcast listeners answer without a stream; controller outgoing calls never play returned media.
+The backend denies listener transmission and cross-room tickets. Room snapshots remove calls from offline members; microphone-off members remain connected in normal rooms, with their received audio muted. Broadcast calls are removed when the controller stops transmitting.
+Normal microphone toggles only enable/disable the local audio track. Simultaneous calls converge to one shared connection.
 
 ## Operations
 
@@ -60,3 +60,7 @@ Security advisors still report private RLS tables with no policies (intentional 
 ## v2.1.1 voice investigation
 
 An old in-flight presence snapshot no longer closes a newly authorized incoming call. Receiving a track no longer cancels the ICE connection watchdog: track creation does not prove packets can flow. The toolbar reports connected audio peers and timeout messages distinguish a missing answer from failed ICE connectivity. Receiving-side authorization errors are now visible. No TURN service has been configured. Local two-peer synthetic-audio testing is not a substitute for physical cross-network testing.
+
+## v2.1.2 scoped restoration
+
+Restored ordinary-room duplex capture/answer/playback and the third STUN endpoint from bd9f9ec, adapted to existing room authorization and broadcast isolation. No database, password, record-search, deletion, or chat-composer changes. HK/FD/SEC/FB/LOBBY are displayed as 一號頻道/二號頻道/三號頻道/四號頻道/五號頻道; stored room keys are unchanged. All endpoints should reload the new client together because old clients still prune calls on microphone-off. Local browser testing uses two actual app instances with a mock database, real PeerJS signaling and synthetic audio; physical Wi-Fi/4G verification remains necessary. TURN preparation remains separate and inactive.
