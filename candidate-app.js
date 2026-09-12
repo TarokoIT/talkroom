@@ -1,3 +1,4 @@
+import {staleCallReason} from './candidate-health.js?v=2';
 import {CONFIG} from './config.js';
 import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './candidate-core.js?v=1';
 import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing,authorizedVoicePeer} from './voice-core.js?v=2.1.3';
@@ -213,7 +214,7 @@ function sync(){
    const data=await rpc('sync',{mic,speaker,latest_message_id:messagesKey.split(',').at(-1)||null,history_revision:historyRevision});
    if(state!==current||epoch!==generation)return;
    lastSync=Date.now();render(data);historyRevision=data.history_revision??null;
-   for(const entry of allCalls)if(!peers.some(p=>p.id===entry.id)){diag('roster-removes-call');entry.call.close();}
+   for(const entry of allCalls)if(!peers.some(p=>p.id===entry.id)){diag('roster-removes-call');closeEntry(outgoing,entry.id,entry,'member-left');}
    updateRemoteMute();
    status(peer?.disconnected?'資料已連線 · 語音重新連線中':'● 房間已連線 · '+current.username);
    for(const [id,entry] of incoming){
@@ -235,18 +236,20 @@ function sync(){
  })().finally(()=>{syncTask=null;});
  return syncTask;
 }
-function closeEntry(map,id,entry){
- if(map.get(id)!==entry)return;diag('remove-call');map.delete(id);clearTimeout(entry.timeout);entry.audio?.remove();
- if(entry.audio)removeMeter(id);
+function closeEntry(map,id,entry,reason='cleanup'){
+ if(entry.retired)return;entry.retired=true;allCalls.delete(entry);
+ diag('remove-call',{call:entry.number,member:id.slice(0,8),reason});
+ if(map.get(id)===entry){map.delete(id);entry.audio?.remove();if(entry.audio)removeMeter(id);}
  try{entry.call.close();}catch{}
 }
-function watchCall(map,id,call){
- const entry={id,call,audio:null,timeout:null,acceptedAt:performance.now()};map.set(id,entry);allCalls.add(entry);diag('call',{direction:call._originator?'out':'in'});
- const cleanup=()=>{allCalls.delete(entry);closeEntry(map,id,entry);diag('call-close');};
+let callSequence=0;
+function watchCall(map,id,call,direction){
+ const entry={id,call,number:++callSequence,direction,audio:null,acceptedAt:performance.now(),disconnectedAt:null,retired:false};map.set(id,entry);allCalls.add(entry);diag('call',{call:entry.number,member:id.slice(0,8),direction});
+ const cleanup=()=>closeEntry(map,id,entry,'peer-close');
  call.on('close',cleanup);call.on('error',()=>{cleanup();report('語音連線發生錯誤，請查看診斷。');});
  call.on('iceStateChanged',()=>{
   if(map.get(id)!==entry)return;
-  diag('ice',{state:call.peerConnection?.iceConnectionState});
+  diag('ice',{call:entry.number,member:id.slice(0,8),state:call.peerConnection?.iceConnectionState});
   updateVoiceStatus();
  });
  return entry;
@@ -258,7 +261,7 @@ function startCall(dest,epoch){
   // comes exclusively from our authenticated, server-filtered room snapshot.
   const call=peer.call(dest.peer_id,stream);
   if(!call)throw new Error('無法建立語音連線');
-  const entry=watchCall(outgoing,dest.id,call);
+  const entry=watchCall(outgoing,dest.id,call,'out');
   if(state.room!=='BROADCAST')attachRemoteAudio(outgoing,dest.id,entry,epoch);
  }catch(e){if(epoch===generation&&state)report(e);}
 }
@@ -268,7 +271,7 @@ function acceptCall(call){
  if(!sender){diag('reject-call',{reason:'not in recent authorized room roster'});call.close();return;}
  try{
   call.answer(stream);
-  const entry=watchCall(incoming,sender.id,call);
+  const entry=watchCall(incoming,sender.id,call,'in');
   attachRemoteAudio(incoming,sender.id,entry,epoch);
   // Do not await a database request between PeerJS's offer event and answer.
 
@@ -281,12 +284,12 @@ function attachRemoteAudio(map,id,entry,epoch){
    entry.audio?.remove();watchAudio(id,remote);
    const audio=mediaElements.get(id)||document.createElement('audio');mediaElements.set(id,audio);audio.autoplay=true;audio.setAttribute('playsinline','');
    audio.srcObject=remote;entry.audio=audio;updateRemoteMute();$('audio-container').append(audio);
-   audio.play().catch(()=>{$('resume-audio').hidden=false;});
+   audio.play().then(()=>diag('play-start',{call:entry.number})).catch(e=>{diag('play-blocked',{call:entry.number,error:e.name});$('resume-audio').hidden=false;});
   });
 }
 function stopSending(){
  mic=false;if(stream)for(const track of stream.getAudioTracks())track.enabled=false;
- for(const entry of [...allCalls])entry.call.close();allCalls.clear();
+ for(const entry of [...allCalls])closeEntry(outgoing,entry.id,entry,'local-mic-off');
  for(const [id,entry] of outgoing)closeEntry(outgoing,id,entry);diag('mic-stop-closes-calls');
  updateControls();
 }
@@ -309,7 +312,7 @@ $('mic-button').addEventListener('click',async()=>{
  finally{micBusy=false;$('mic-button').disabled=false;}
 });
 $('speaker-button').addEventListener('click',()=>{
- speaker=!speaker;updateRemoteMute();
+ speaker=!speaker;diag('local-speaker',{enabled:speaker});updateRemoteMute();
  updateControls();if(speaker)resumeAudio();sync().catch(report);
 });
 async function resumeAudio(){
@@ -366,9 +369,12 @@ async function candidateMedia(){
  o.connect(g);g.connect(dest);o.start();toneCleanup=()=>{o.stop();o.disconnect();g.disconnect();};return dest.stream;
 }
 setInterval(async()=>{
- const rows=[];for(const entry of allCalls){const pc=entry.call.peerConnection;if(!pc||pc.signalingState==='closed')continue;
+ const rows=[];for(const entry of [...allCalls]){const pc=entry.call.peerConnection,now=performance.now();
+ if(pc?.iceConnectionState==='disconnected')entry.disconnectedAt??=now;else entry.disconnectedAt=null;
+ const reason=staleCallReason(pc,entry.acceptedAt,entry.disconnectedAt,now);
+ if(reason){closeEntry(outgoing,entry.id,entry,reason);updateVoiceStatus();continue;}if(!pc)continue;
  try{let sent=0,received=0,energy=0;for(const v of (await pc.getStats()).values()){if(v.type==='outbound-rtp')sent+=v.bytesSent||0;if(v.type==='inbound-rtp'){received+=v.bytesReceived||0;energy+=v.totalAudioEnergy||0;}}
- rows.push({ICE:pc.iceConnectionState,SDP:pc.signalingState,sentBytes:sent,receivedBytes:received,audioEnergy:energy});}catch{}}
+ rows.push({call:entry.number,member:entry.id.slice(0,8),direction:entry.direction,playing:entry.audio?!entry.audio.paused:null,muted:entry.audio?.muted??null,ICE:pc.iceConnectionState,SDP:pc.signalingState,sentBytes:sent,receivedBytes:received,audioEnergy:energy});}catch{}}
  diagnosticSample=rows;$('diagnostic-stats').textContent=JSON.stringify(rows,null,2);
 },1000);
-$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'candidate-1',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
+$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'candidate-2',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
