@@ -18,6 +18,7 @@ function field(label,type,value=''){
 }
 async function load(){
  const data=await api('list');$('admin-login').hidden=true;$('admin-panel').hidden=false;$('admin-rooms').replaceChildren();
+ refreshUsage();
  for(const id of ['search-room','delete-room']){
   const select=$(id),value=select.value;select.replaceChildren(new Option(id==='search-room'?'全部房間':'請選擇一個房間',''));
   for(const room of data.rooms)select.add(new Option(room.title+' ('+channelLabel(room.code)+')',room.code));select.value=value;
@@ -72,6 +73,21 @@ $('admin-register').addEventListener('click',async()=>{
 $('admin-refresh').addEventListener('click',()=>load().catch(e=>status(e.message)));
 $('admin-signout').addEventListener('click',async()=>{await client.auth.signOut();$('admin-panel').hidden=true;$('admin-login').hidden=false;$('admin-rooms').replaceChildren();$('search-results').replaceChildren();invalidatePreview();searchFilter=null;searchTotal=0;searchOffset=0;status('已登出。');});
 let recordsBusy=false,searchFilter=null,searchOffset=0,searchTotal=0,deletePreview=null;
+let usageBusy=false;
+async function refreshUsage(){
+ if(usageBusy)return;usageBusy=true;$('usage-refresh').disabled=true;
+ $('usage-status').textContent='正在取得官方用量…';$('usage-values').textContent='';
+ try{
+  const {data,error}=await client.functions.invoke('metered-usage',{body:{}});
+  if(error||!data||data.error)throw new Error(data?.error||'無法取得用量，請稍後再試');
+  if($('admin-panel').hidden)return;
+  const mb=n=>(n*1000).toLocaleString('zh-TW',{maximumFractionDigits:2});
+  const percent=data.quotaInGB>0?data.usageInGB/data.quotaInGB*100:null;
+  $('usage-values').textContent='已用 '+mb(data.usageInGB)+' MB ／ 額度 '+mb(data.quotaInGB)+' MB · 剩餘 '+mb(data.remainingInGB)+' MB'+(percent===null?'':' · 使用 '+percent.toFixed(1)+'%');
+  $('usage-status').textContent='查詢時間：'+new Date(data.checkedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})+'（台灣時間）。'+(percent>=100?'額度已用完。':percent>=80?'已使用超過 80%，請留意剩餘額度。':'');
+ }catch(e){$('usage-status').textContent=e.message;}finally{usageBusy=false;$('usage-refresh').disabled=false;}
+}
+$('usage-refresh').addEventListener('click',refreshUsage);
 async function records(action,payload){
  const {data,error}=await client.rpc('talkroom_records',{p_action:action,p_payload:payload});
  if(error)throw error;if(!data?.ok)throw new Error('操作失敗');return data;

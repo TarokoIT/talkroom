@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TalkRoom｜管理後台</title>
-<link rel="stylesheet" href="styles.css"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js?v=2.1.2"></script></head>
-<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">v2.1.2</span></header>
+<link rel="stylesheet" href="styles.css"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js?v=2.1.4"></script></head>
+<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">後台 v2.1.4</span></header>
 <p><a href="./">← 返回通訊首頁</a></p>
 <section id="admin-login" class="entry-panel"><h1>管理員登入</h1><p>使用已驗證且獲授權的管理員 Email。房間密碼不能登入後台。</p>
 <form id="admin-login-form"><label for="admin-email">Email</label><input id="admin-email" type="email" autocomplete="username" required>
@@ -10,6 +10,7 @@
 <p class="hint">首次建立後，請到信箱驗證 Email，再回來登入。建立帳號不會自動取得管理權限。</p></section>
 <p id="admin-status" role="status" aria-live="polite"></p>
 <section id="admin-panel" hidden><div class="header-actions"><button id="admin-refresh" class="secondary">重新整理</button><button id="admin-signout" class="secondary">登出</button></div>
+<section class="entry-panel"><h2>TURN 中繼流量</h2><p id="usage-values"></p><p id="usage-status" role="status"></p><button id="usage-refresh" class="secondary">更新用量</button><p class="hint">Metered 帳號當期總用量（傳入＋傳出），並非個別房間統計。1 GB 以 1,000 MB 顯示；官方統計可能延遲。登入或按更新時查詢，不會持續自動監控。免費方案用完額度會停止中繼服務。</p></section>
 <p class="hint">更改任一房間密碼會撤銷該房全部登入，包括廣播控制台與工作站。正常連線裝置會在下次同步時退出；員工須使用新密碼重新加入。</p>
 <div id="admin-rooms" class="admin-grid"></div>
 <section class="entry-panel records-panel"><h2>記錄搜尋與匯出</h2>
