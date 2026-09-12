@@ -1,0 +1,3 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {candidateInfo} from '../ice-diagnostics.js';
+test('captures routing addresses without including ICE credentials',()=>{const c=candidateInfo({candidate:'candidate:123 1 udp 12345 203.0.113.2 50000 typ srflx raddr 192.0.2.2 rport 1234 ufrag secret',sdpMid:'0'});assert.equal(c.address,'203.0.113.2');assert.equal(c.relatedAddress,'192.0.2.2');assert.equal(c.type,'srflx');assert.equal(JSON.stringify(c).includes('secret'),false);});
+test('end of candidates and SDP candidate lines',()=>{assert.deepEqual(candidateInfo(null),{end:true});assert.equal(candidateInfo('a=candidate:1 1 tcp 1 abc.local 9 typ host tcptype active').tcpType,'active');});
