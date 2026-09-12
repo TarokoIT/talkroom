@@ -5,14 +5,14 @@
  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
  <meta name="theme-color" content="#112b2a">
  <title>TalkRoom｜部門對講與廣播</title>
- <link rel="stylesheet" href="styles.css">
+ <link rel="stylesheet" href="styles.css?v=2.2.0">
  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
  <script defer src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
  <script type="module" src="app.js?v=2.1.3"></script>
 </head>
-<body>
+<body class="talk-app login-view">
  <main id="login-screen" class="lobby">
-  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.1.3</span></header>
+  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.2.0</span></header>
   <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>選擇頻道，開始通訊。</h1><p>部門對講與工作站廣播，讓每一句話到達對的人。</p></div>
   <form id="login-form" class="login-layout">
    <fieldset class="room-section"><legend>01　選擇房間</legend><div id="rooms" class="room-grid"></div><p id="catalog-status" class="catalog-note" role="status"></p></fieldset>
@@ -26,21 +26,21 @@
     <p class="privacy-note">每個房間的訊息與語音獨立。廣播只傳送至廣播頻道。</p>
    </section>
   </form>
-  <p style="text-align:center"><a href="candidate.html">🧪 第七房：語音測試（候選版）</a></p><footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.1.3 · 2026.09.12</span></footer>
+  <p style="text-align:center"><a href="candidate.html">🧪 第七房：語音測試（候選版）</a></p><footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.2.0 · 2026.09.13</span></footer>
  </main>
  <main id="room-screen" class="room-screen" hidden>
-  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.1.3</span><button id="leave-button" class="secondary">退出房間</button></div></header>
-  <div class="connection-bar"><span id="connection-status" role="status" aria-live="polite">正在連線…</span><button id="resume-audio" class="secondary" hidden>點此啟用收聽</button></div>
+  <header class="room-header"><div class="room-heading"><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.2.0</span><button id="leave-button" class="secondary">退出房間</button></div></header>
+  <div class="connection-bar"><span id="member-count" class="member-count"></span><span id="connection-status" role="status" aria-live="polite">正在連線…</span><button id="resume-audio" class="secondary" hidden>點此啟用收聽</button></div>
   <section id="broadcast-banner" class="broadcast-banner" hidden><span class="broadcast-icon" aria-hidden="true">◉</span><div><strong id="broadcast-state">等待控制台</strong><p id="broadcast-detail">此工作站只接收廣播頻道音訊。</p></div></section>
-  <section class="presence"><div class="section-label"><span>房間成員</span><span id="member-count"></span></div><div id="user-list" class="user-list"></div></section>
+  <section class="presence"><div id="user-list" class="user-list" aria-label="成員，雙擊其他成員可發出提示音"></div><p id="attention-status" role="status" class="hint"></p></section>
   <section id="chat-win" class="chat-win" aria-label="房間訊息" aria-live="polite"></section>
   <footer class="controls">
-   <div class="control-toolbar"><button id="mic-button" class="mic-button" aria-pressed="false">🎤 開啟麥克風</button><button id="speaker-button" class="secondary" aria-pressed="true">🔊 收聽開啟</button><div id="text-tools" class="text-tools"><label>名字 <input type="color" id="name-color" value="#1e90ff"></label><label>文字 <input type="color" id="text-color" value="#2f3542"></label><label>尺寸 <select id="font-size"><option value="14px">小</option><option value="17px" selected>中</option><option value="22px">大</option></select></label></div></div>
+   <div class="control-toolbar"><button id="mic-button" class="mic-button" aria-pressed="false">🎤 開啟麥克風</button><button id="speaker-button" class="secondary" aria-pressed="true">🔊 收聽開啟</button><button id="ack-button" class="secondary" type="button">收到</button><div id="text-tools" class="text-tools"><label>名字 <input type="color" id="name-color" value="#1e90ff"></label><label>文字 <input type="color" id="text-color" value="#2f3542"></label><label>尺寸 <select id="font-size"><option value="14px">小</option><option value="17px" selected>中</option><option value="22px">大</option></select></label></div></div>
    <p id="voice-status" class="hint">麥克風預設關閉</p>
    <form id="message-form" class="message-form"><textarea id="message-input" rows="3" maxlength="2000" placeholder="輸入工作事項… Enter 換行，Ctrl＋Enter 傳送" aria-label="多行訊息" required></textarea><button id="send-button" class="primary">傳送</button></form>
    <p id="room-error" role="alert" class="error"></p>
   </footer>
  </main>
  <div id="audio-container" hidden></div>
-</body>
+<details class="voice-diagnostics"><summary>語音診斷</summary><button id="diagnostic-export">匯出診斷</button><pre id="diagnostic-stats"></pre><pre id="diagnostic-log"></pre></details></body>
 </html>

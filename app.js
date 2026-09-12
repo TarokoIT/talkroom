@@ -1,5 +1,6 @@
+import {staleCallReason} from './candidate-health.js?v=2';
 import {CONFIG} from './config.js';
-import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.1.3';
+import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.2.0';
 import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing,authorizedVoicePeer} from './voice-core.js?v=2.1.3';
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
@@ -9,7 +10,7 @@ const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
 let selected='HK',state=null,peer=null,stream=null,mic=false,speaker=true;
 let timer=null,syncTask=null,peers=[],messagesKey='',generation=0,lastSync=0;
 let audioContext=null,wakeLock=null,joining=false,micBusy=false;
-const outgoing=new Map(),incoming=new Map();
+const outgoing=new Map(),incoming=outgoing,allCalls=new Set(),mediaElements=new Map();
 const catalog=new Map();let catalogBusy=false;
 let historyRevision=null;
 const meters=new Map();
@@ -92,16 +93,16 @@ async function rpc(action,payload={},session=state?.session_id){
  if(!data?.ok)throw new Error(data?.error||'伺服器未回應，請稍後重試');
  return data;
 }
-function createPeer(){
+function createPeer(peerId,iceServers){
  return new Promise((resolve,reject)=>{
-  const instance=new window.Peer({config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]}});
+  const instance=new window.Peer(peerId,{config:{iceServers,iceTransportPolicy:'relay'}});
   peer=instance;
   const timeout=setTimeout(()=>{instance.destroy();reject(new Error('語音服務連線逾時，請再試一次'));},15000);
   instance.once('open',id=>{clearTimeout(timeout);resolve(id);});
   instance.on('call',call=>acceptCall(call));
   instance.on('error',e=>{
    clearTimeout(timeout);
-   if(!state)reject(new Error('語音服務無法連線：'+e.type));
+   if(!instance.open)reject(new Error('語音服務無法連線：'+e.type));
    else report('語音連線問題：'+e.type+'。若持續無聲，請退出後重新進入。');
   });
   instance.on('disconnected',()=>{
@@ -128,15 +129,20 @@ $('login-form').addEventListener('submit',async event=>{
   // Restore the original duplex setup: prepare a muted microphone before joining.
   // Broadcast listeners remain receive-only and never request microphone access.
   if(role==='member'){
-   stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+   stream=await candidateMedia();
    stream.getAudioTracks().forEach(track=>track.enabled=false);
   }
   const {data:authData,error:authError}=await client.auth.getSession();if(authError)throw authError;
   if(!authData.session){const {error}=await client.auth.signInAnonymously();if(error)throw error;}
-  const peerId=await createPeer();
+  const peerId='talkroom-'+crypto.randomUUID();
   const joined=await rpc('join',{room,role,username,password,peer_id:peerId},null);
   state={...joined,username,peer_id:peerId};generation++;mic=false;speaker=true;peers=[];messagesKey='';historyRevision=null;
-  $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;
+  const {data:iceServers,error:turnError}=await client.rpc('talkroom_room_turn',{p_session:state.session_id});
+  if(turnError)throw new Error('TURN 設定取得失敗，請重新登入房間');
+  if(!Array.isArray(iceServers)||!iceServers.some(s=>/^turns?:/.test(s.urls)))throw new Error('TURN 設定不完整');
+  await createPeer(peerId,iceServers);
+  diag('turn-mode',{policy:'relay',serverCount:iceServers.length});
+  $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;document.body.classList.remove('login-view');
   if(stream)watchAudio(state.session_id,stream);
   $('room-title').textContent=joined.title;$('room-code').textContent=channelLabel(joined.room);
   $('broadcast-banner').hidden=joined.room!=='BROADCAST';
@@ -161,28 +167,29 @@ function updateControls(){
 }
 function updateVoiceStatus(){
  if(!state)return;
- const connected=[...outgoing.values(),...incoming.values()].filter(e=>isVoiceConnected(e.call.peerConnection));
- const sending=state.room==='BROADCAST'?[...outgoing.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length:connected.length;
- const receiving=state.room==='BROADCAST'?[...incoming.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length:connected.length;
+ const connected=[...outgoing.values()].filter(e=>isVoiceConnected(e.call.peerConnection));
+ const sending=state.room==='BROADCAST'?[...outgoing.values()].filter(e=>e.direction==='out'&&isVoiceConnected(e.call.peerConnection)).length:connected.length;
+ const receiving=state.room==='BROADCAST'?[...incoming.values()].filter(e=>e.direction==='in'&&isVoiceConnected(e.call.peerConnection)).length:connected.length;
  const targets=canTransmit(state.role)?voiceTargets(peers,state).length:0;
  $('voice-status').textContent=(mic?'麥克風已開啟 · 語音接通 '+sending+'/'+targets+' 台':'麥克風已關閉')+
   (speaker?' · 收聽連線 '+receiving+' 台':' · 收聽已關閉');
 }
 function updateRemoteMute(){
  for(const map of [outgoing,incoming])for(const [id,entry] of map){
-  if(entry.audio)entry.audio.muted=!speaker||!peers.some(p=>p.id===id&&p.mic);
+  if(entry.audio)entry.audio.muted=!speaker;
  }
 }
 function render(data){
  peers=data.peers;
- const list=$('user-list');list.replaceChildren();
+ const list=$('user-list');const oldTags=new Map([...list.children].map(t=>[t.dataset.session,t]));
  for(const p of peers){
-  const tag=document.createElement('div');tag.className='user-tag '+(p.speaker?'listening':'not-listening');tag.dataset.session=p.id;
+  const tag=oldTags.get(p.id)||document.createElement('button');oldTags.delete(p.id);tag.type='button';tag.className='user-tag '+(p.speaker?'listening':'not-listening');tag.dataset.session=p.id;
   tag.title=(p.speaker?'收聽開啟':'收聽關閉')+'；黃色底表示偵測到聲音';
   tag.setAttribute('aria-label',p.username+'，'+(p.speaker?'收聽開啟':'收聽關閉'));
   const name=document.createElement('span');name.textContent=p.username+(p.id===state.session_id?'（我）':'');
-  tag.append(name);list.append(tag);
+  tag.replaceChildren(name);if(tag.parentNode!==list)list.append(tag);tag.disabled=p.id===state.session_id;tag.title+=(tag.disabled?'':'；雙擊發出提示音');
  }
+ for(const tag of oldTags.values())tag.remove();
  $('member-count').textContent=state.room==='BROADCAST'?peers.filter(p=>p.role==='listener').length+' / 15 台工作站':peers.length+' / 15 人';
  if(Array.isArray(data.messages)){
  const nextKey=data.messages.map(m=>m.id).join(',');
@@ -213,18 +220,20 @@ function sync(){
    const data=await rpc('sync',{mic,speaker,latest_message_id:messagesKey.split(',').at(-1)||null,history_revision:historyRevision});
    if(state!==current||epoch!==generation)return;
    lastSync=Date.now();render(data);historyRevision=data.history_revision??null;
+   pollAttention();
+   for(const entry of allCalls)if(!peers.some(p=>p.id===entry.id)){diag('roster-removes-call');closeEntry(outgoing,entry.id,entry,'member-left');}
    updateRemoteMute();
    status(peer?.disconnected?'資料已連線 · 語音重新連線中':'● 房間已連線 · '+current.username);
    for(const [id,entry] of incoming){
-    if(shouldPruneIncoming(peers,id,entry.acceptedAt,snapshotStartedAt,current.room!=='BROADCAST'))closeEntry(incoming,id,entry);
+    if(entry.direction==='in'&&shouldPruneIncoming(peers,id,entry.acceptedAt,snapshotStartedAt,current.room!=='BROADCAST'))closeEntry(incoming,id,entry);
    }
    for(const [id,entry] of outgoing){
-    if(!peers.some(p=>p.id===id))closeEntry(outgoing,id,entry);
+    if(!peers.some(p=>p.id===id)){diag('roster-removes-call');closeEntry(outgoing,id,entry);}
    }
    if(mic&&canTransmit(current.role))for(const dest of voiceTargets(peers,current))startCall(dest,epoch);
    updateVoiceStatus();
   }catch(e){
-   if(state!==current)return;
+   if(state!==current)return;diag('sync-error',{code:e.code||'unknown'});
    status('連線中斷，正在重試…');
    if(Date.now()-lastSync>10000){stopSending();for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);}
    if(e.code==='42501'||errorText(e).includes('房間已滿')){
@@ -234,26 +243,22 @@ function sync(){
  })().finally(()=>{syncTask=null;});
  return syncTask;
 }
-function closeEntry(map,id,entry){
- if(map.get(id)!==entry)return;map.delete(id);clearTimeout(entry.timeout);entry.audio?.remove();
- if(entry.audio)removeMeter(id);
+function closeEntry(map,id,entry,reason='cleanup'){
+ if(entry.retired)return;entry.retired=true;allCalls.delete(entry);
+ diag('remove-call',{call:entry.number,member:id.slice(0,8),reason});
+ if(map.get(id)===entry){map.delete(id);entry.audio?.remove();if(entry.audio)removeMeter(id);}
  try{entry.call.close();}catch{}
 }
-function watchCall(map,id,call){
- const entry={call,audio:null,timeout:null,acceptedAt:performance.now()};map.set(id,entry);
- const cleanup=()=>closeEntry(map,id,entry);
- call.on('close',cleanup);call.on('error',()=>{cleanup();report('語音連線失敗，正在重新連線。');});
+let callSequence=0;
+function watchCall(map,id,call,direction){
+ const entry={id,call,number:++callSequence,direction,audio:null,acceptedAt:performance.now(),disconnectedAt:null,retired:false};map.set(id,entry);allCalls.add(entry);diag('call',{call:entry.number,member:id.slice(0,8),direction});
+ const cleanup=()=>closeEntry(map,id,entry,'peer-close');
+ call.on('close',cleanup);call.on('error',()=>{cleanup();report('語音連線發生錯誤，請查看診斷。');});
  call.on('iceStateChanged',()=>{
   if(map.get(id)!==entry)return;
-  if(isVoiceConnected(call.peerConnection))clearTimeout(entry.timeout);
+  diag('ice',{call:entry.number,member:id.slice(0,8),state:call.peerConnection?.iceConnectionState});
   updateVoiceStatus();
  });
- entry.timeout=setTimeout(()=>{
-  const pc=call.peerConnection;
-  if(!isVoiceConnected(pc)){
-   const reason=voiceFailure(pc);cleanup();report(reason);updateVoiceStatus();
-  }
- },45000);
  return entry;
 }
 function startCall(dest,epoch){
@@ -263,28 +268,20 @@ function startCall(dest,epoch){
   // comes exclusively from our authenticated, server-filtered room snapshot.
   const call=peer.call(dest.peer_id,stream);
   if(!call)throw new Error('無法建立語音連線');
-  const entry=watchCall(outgoing,dest.id,call);
+  const entry=watchCall(outgoing,dest.id,call,'out');
   if(state.room!=='BROADCAST')attachRemoteAudio(outgoing,dest.id,entry,epoch);
  }catch(e){if(epoch===generation&&state)report(e);}
 }
 function acceptCall(call){
  const epoch=generation;
  const sender=authorizedVoicePeer(peers,state,call.peer,Date.now()-lastSync);
- if(!sender){call.close();return;}
+ if(!sender){diag('reject-call',{reason:'not in recent authorized room roster'});call.close();return;}
  try{
-  if(state.room!=='BROADCAST'){
-   const existing=outgoing.get(sender.id);
-   if(existing){
-    // Simultaneous offers converge to one shared duplex call instead of duplicate audio.
-    if(preferOutgoing(state.session_id,sender.id)){call.close();return;}
-    closeEntry(outgoing,sender.id,existing);
-   }
-  }
-  const old=incoming.get(sender.id);if(old)closeEntry(incoming,sender.id,old);
-  const entry=watchCall(incoming,sender.id,call);
+  call.answer(state.room==='BROADCAST'?undefined:stream);
+  const entry=watchCall(incoming,sender.id,call,'in');
   attachRemoteAudio(incoming,sender.id,entry,epoch);
   // Do not await a database request between PeerJS's offer event and answer.
-  call.answer(state.room==='BROADCAST'?undefined:stream);
+
  }catch(e){call.close();if(epoch===generation&&state)report('語音接聽失敗：'+errorText(e));}
 }
 function attachRemoteAudio(map,id,entry,epoch){
@@ -292,14 +289,15 @@ function attachRemoteAudio(map,id,entry,epoch){
    if(epoch!==generation||map.get(id)!==entry)return;
    // A remote track can arrive before ICE connects; keep the connection watchdog running.
    entry.audio?.remove();watchAudio(id,remote);
-   const audio=document.createElement('audio');audio.autoplay=true;audio.setAttribute('playsinline','');
+   const audio=mediaElements.get(id)||document.createElement('audio');mediaElements.set(id,audio);audio.autoplay=true;audio.setAttribute('playsinline','');
    audio.srcObject=remote;entry.audio=audio;updateRemoteMute();$('audio-container').append(audio);
-   audio.play().catch(()=>{$('resume-audio').hidden=false;});
+   audio.play().then(()=>diag('play-start',{call:entry.number})).catch(e=>{diag('play-blocked',{call:entry.number,error:e.name});$('resume-audio').hidden=false;});
   });
 }
 function stopSending(){
  mic=false;if(stream)for(const track of stream.getAudioTracks())track.enabled=false;
- if(state?.room==='BROADCAST')for(const [id,entry] of outgoing)closeEntry(outgoing,id,entry);
+ for(const entry of [...allCalls])closeEntry(outgoing,entry.id,entry,'local-mic-off');
+ for(const [id,entry] of outgoing)closeEntry(outgoing,id,entry);diag('mic-stop-closes-calls');
  updateControls();
 }
 $('mic-button').addEventListener('click',async()=>{
@@ -309,7 +307,7 @@ $('mic-button').addEventListener('click',async()=>{
   if(mic)stopSending();
   else{
    if(!stream){
-    const acquired=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    const acquired=await candidateMedia();
     if(epoch!==generation||!state){acquired.getTracks().forEach(t=>t.stop());return;}
     stream=acquired;
     watchAudio(state.session_id,stream);
@@ -321,7 +319,7 @@ $('mic-button').addEventListener('click',async()=>{
  finally{micBusy=false;$('mic-button').disabled=false;}
 });
 $('speaker-button').addEventListener('click',()=>{
- speaker=!speaker;updateRemoteMute();
+ speaker=!speaker;diag('local-speaker',{enabled:speaker});updateRemoteMute();
  updateControls();if(speaker)resumeAudio();sync().catch(report);
 });
 async function resumeAudio(){
@@ -345,8 +343,8 @@ async function leave(notify=true){
  for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);
  stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
  for(const id of meters.keys())removeMeter(id);
- $('audio-container').replaceChildren();$('chat-win').replaceChildren();$('user-list').replaceChildren();
- $('room-screen').hidden=true;$('login-screen').hidden=false;$('password').value='';
+ mediaElements.clear();$('audio-container').replaceChildren();$('chat-win').replaceChildren();$('user-list').replaceChildren();
+ $('room-screen').hidden=true;$('login-screen').hidden=false;document.body.classList.add('login-view');$('password').value='';
  try{await wakeLock?.release();}catch{}wakeLock=null;
  if(notify)$('login-status').textContent='已退出，可選擇其他房間。';
  if(old)try{await rpc('leave',{},old.session_id);}catch(e){if(notify)$('login-status').textContent='已退出；伺服器會在一分鐘內更新離線狀態。';}
@@ -367,4 +365,49 @@ function ding(){
   gain.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+offset+.1);
   oscillator.start(audioContext.currentTime+offset);oscillator.stop(audioContext.currentTime+offset+.1);
  }
+}
+
+const diagnosticEvents=[];let diagnosticSample=[];
+function diag(event,detail={}){diagnosticEvents.push({at:new Date().toISOString(),event,...detail});if(diagnosticEvents.length>200)diagnosticEvents.shift();$('diagnostic-log').textContent=diagnosticEvents.slice(-30).map(x=>JSON.stringify(x)).join('\n');}
+async function candidateMedia(){
+ return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+}
+setInterval(async()=>{
+ const rows=[];for(const entry of [...allCalls]){const pc=entry.call.peerConnection,now=performance.now();
+ if(pc?.iceConnectionState==='disconnected')entry.disconnectedAt??=now;else entry.disconnectedAt=null;
+ const reason=staleCallReason(pc,entry.acceptedAt,entry.disconnectedAt,now);
+ if(reason){closeEntry(outgoing,entry.id,entry,reason);updateVoiceStatus();continue;}if(!pc)continue;
+ try{let sent=0,received=0,energy=0,pair='none';const reports=await pc.getStats();for(const v of reports.values()){if(v.type==='transport'&&v.selectedCandidatePairId){const p=reports.get(v.selectedCandidatePairId);pair=(reports.get(p?.localCandidateId)?.candidateType||'?')+' → '+(reports.get(p?.remoteCandidateId)?.candidateType||'?');}if(v.type==='outbound-rtp')sent+=v.bytesSent||0;if(v.type==='inbound-rtp'){received+=v.bytesReceived||0;energy+=v.totalAudioEnergy||0;}}
+ rows.push({call:entry.number,member:entry.id.slice(0,8),direction:entry.direction,playing:entry.audio?!entry.audio.paused:null,muted:entry.audio?.muted??null,ICE:pc.iceConnectionState,SDP:pc.signalingState,pair,policy:pc.getConfiguration().iceTransportPolicy,sentBytes:sent,receivedBytes:received,audioEnergy:energy});}catch{}}
+ diagnosticSample=rows;$('diagnostic-stats').textContent=JSON.stringify(rows,null,2);
+},1000);
+$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'2.2.0-turn',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
+
+async function interaction(action,target=null){
+ const {data,error}=await client.rpc('talkroom_interact',{p_session:state?.session_id,p_action:action,p_target:target});
+ if(error)throw error;return data;
+}
+$('ack-button').addEventListener('click',async()=>{
+ if(!state)return;$('ack-button').disabled=true;
+ try{await interaction('ack');$('room-error').textContent='';await sync();}
+ catch(e){report(e);}finally{$('ack-button').disabled=false;}
+});
+let lastTap={id:null,at:0},beepBusy=false,attentionBusy=false;
+$('user-list').addEventListener('click',async event=>{
+ const tag=event.target.closest('[data-session]');if(!state||!tag||tag.dataset.session===state.session_id)return;
+ const at=performance.now(),id=tag.dataset.session;
+ if(lastTap.id!==id||at-lastTap.at>450){lastTap={id,at};return;}
+ lastTap={id:null,at:0};if(beepBusy)return;beepBusy=true;
+ try{await interaction('beep',id);$('attention-status').textContent='已送出提醒';}
+ catch(e){report(e);}finally{beepBusy=false;}
+});
+async function pollAttention(){
+ if(!state||attentionBusy)return;attentionBusy=true;const session=state;
+ try{const data=await interaction('poll');if(state!==session||!data.senders?.length)return;
+ $('attention-status').textContent=data.senders.join('、')+' 提醒你';
+ await unlockAudio();
+ if(audioContext.state!=='running'){$('resume-audio').hidden=false;return;}
+ const o=audioContext.createOscillator(),g=audioContext.createGain(),t=audioContext.currentTime;
+ o.frequency.value=880;o.connect(g);g.connect(audioContext.destination);g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.001,t+.2);o.start(t);o.stop(t+.22);o.onended=()=>{o.disconnect();g.disconnect();};
+ }catch{}finally{attentionBusy=false;}
 }

@@ -1,3 +1,12 @@
+## v2.2.0 — 2026-09-13
+
+- Promote the tested candidate voice lifecycle and authenticated TURN relay configuration to all six rooms. Broadcast stays receive-only for workstations.
+- Pastel lobby and individual channel colors; compact room name/channel and connection/count rows.
+- Add one-tap 收到, including broadcast listeners, without replacing message drafts.
+- Double-tap another room member to send a short targeted beep. Server enforces ownership, active same-room targets and a five-second sender cooldown. Beeps expire after 30 seconds and are consumed once. Audible alerts are separate from voice-listening mute and require browser audio permission.
+- Validation: SQL rollback tests for room isolation, identity, cooldown, recipient consumption and broadcast acknowledgment; existing unit suite; browser integration with real TURN and a mock room service for bidirectional RTP, restart, quick reply, targeted beep, and receive-only broadcast across heartbeats.
+- TURN uses the current shared Metered allowance; this release does not increase the 500MB quota. Device lock-screen behavior remains browser/OS dependent.
+
 # Phase 1 — 2026-09-11
 
 ## v2.0.0 — six rooms and broadcast

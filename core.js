@@ -1,12 +1,12 @@
-export const VERSION='2.1.3';
+export const VERSION='2.2.0';
 export function channelLabel(code){return ({HK:'一號頻道',FD:'二號頻道',SEC:'三號頻道',FB:'四號頻道',LOBBY:'五號頻道',BROADCAST:'廣播頻道'})[code]||code;}
 export const ROOMS=[
  {code:'HK',title:'房務部',icon:'⌂',description:'HOUSEKEEPING'},
  {code:'FD',title:'櫃台',icon:'▣',description:'FRONT DESK'},
  {code:'SEC',title:'安全室',icon:'◇',description:'SECURITY'},
  {code:'FB',title:'餐飲部',icon:'♧',description:'FOOD & BEVERAGE'},
- {code:'BROADCAST',title:'廣播頻道',icon:'◉',description:'BROADCAST'},
- {code:'LOBBY',title:'大廳頻道',icon:'◎',description:'LOBBY'}
+ {code:'LOBBY',title:'大廳頻道',icon:'◎',description:'LOBBY'},
+ {code:'BROADCAST',title:'廣播頻道',icon:'◉',description:'BROADCAST'}
 ];
 export function canTransmit(role){return role==='member'||role==='controller';}
 export function safeColor(value,fallback){return /^#[0-9a-f]{6}$/i.test(value)?value:fallback;}
