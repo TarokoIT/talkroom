@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-TW"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TalkRoom 原始語音對照測試</title>
+<style>body{font:16px system-ui;margin:24px auto;padding:0 16px;max-width:900px;background:#f3f6f5;color:#163830}section{background:white;border:1px solid #ccdcd5;border-radius:12px;padding:18px;margin:16px 0}input,select,button{font:inherit;padding:10px;margin:5px;border-radius:6px;border:1px solid #abc;max-width:90%}button{cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:350px;overflow:auto}.warn{color:#93420b}#stats{overflow:auto}table{width:100%;font-size:13px;text-align:left}td,th{padding:6px;border-bottom:1px solid #ddd}</style>
+<h1>原始語音對照測試</h1><p>TEST 1.0 · 獨立測試頁，不讀寫正式房間或聊天資料。不錄音。</p>
+<section id="setup"><label>配對碼（所有裝置相同，至少 12 字元）<br><input id="code" minlength="12" autocomplete="off" placeholder="輸入共同配對碼"></label><br>
+<label>測試端<select id="slot"><option value="1">1 · 你的電腦</option><option value="2">2 · 你的手機</option><option value="3">3 · 助理瀏覽器</option></select></label>
+<label>音源<select id="source"><option value="mic">實際麥克風</option><option value="tone">合成測試音（不使用麥克風）</option></select></label><br><button id="join">加入測試</button></section>
+<section><strong id="status">尚未加入</strong><p id="hint">三端選不同編號。進入後先只開一端麥克風，其他端保持收聽。</p><button id="mic" disabled>開啟發話</button><button id="speaker" disabled>收聽：開</button><button id="leave" disabled>退出測試</button><p class="warn">合成測試音會發出提示音。設備靠近時請使用耳機，避免回授。</p></section>
+<section><h2>連線診斷</h2><p>封包增加代表音訊資料流動，不等於實際喇叭有聲音。只有啟用語音的連線會列出，並非線上人數表。</p><div id="stats"></div><button id="export">匯出診斷 JSON</button><p>報告不含配對碼、完整 Peer ID、IP 位址或錄音。需由你匯出提供；不會自動上傳。</p><pre id="log"></pre></section><div id="audio"></div>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script><script type="module" src="test-voice.js?v=1.0"></script></html>
