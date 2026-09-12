@@ -24,7 +24,7 @@ $('join').onclick=async()=>{
  const run=++epoch;$('join').disabled=true;slot=Number($('slot').value);mic=false;speaker=true;
  try{
  ctx=new AudioContext();await ctx.resume();
- if($('source').value==='tone'){const dest=ctx.createMediaStreamDestination(),gain=ctx.createGain();osc=ctx.createOscillator();osc.frequency.value=440;gain.gain.value=.06;osc.connect(gain);gain.connect(dest);osc.start();stream=dest.stream;}else stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+ if($('source').value==='tone'){const dest=ctx.createMediaStreamDestination(),gain=ctx.createGain();osc=ctx.createOscillator();const notes=[261.63,329.63,392,523.25,392,329.63];for(let i=0;i<7200;i++)osc.frequency.setValueAtTime(notes[i%notes.length],ctx.currentTime+i*.5);gain.gain.value=.06;osc.connect(gain);gain.connect(dest);osc.start();stream=dest.stream;}else stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
  if(run!==epoch)return;stream.getAudioTracks().forEach(t=>t.enabled=false);
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code));const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');ids=[1,2,3].map(i=>'trtest-'+hash+'-'+i);
  peer=new Peer(ids[slot-1],{config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]}});
@@ -38,5 +38,5 @@ $('mic').onclick=()=>{mic=!mic;stream.getAudioTracks().forEach(t=>t.enabled=mic)
 $('speaker').onclick=()=>{speaker=!speaker;$('speaker').textContent='收聽：'+(speaker?'開':'關');for(const a of audio.values()){a.muted=!speaker;if(speaker)a.play().catch(e=>log('play-blocked',{error:e.name}));}ctx?.resume();log('speaker',{enabled:speaker});};
 function leave(update=true){epoch++;clearInterval(tick);clearInterval(statsTick);for(const row of all)row.call.close();active.clear();all.clear();for(const a of audio.values())a.remove();audio.clear();stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;osc?.stop();osc=null;ctx?.close();ctx=null;mic=false;controls(false);$('mic').textContent='開啟發話';if(update)$('status').textContent='已退出';log('leave');}
 $('leave').onclick=()=>leave();
-$('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'TEST 1.0',slot,at:new Date().toISOString(),events,samples},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='talkroom-test-'+(slot||'unknown')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'TEST 1.1',slot,at:new Date().toISOString(),events,samples},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='talkroom-test-'+(slot||'unknown')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 window.addEventListener('pagehide',()=>leave());
