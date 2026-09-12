@@ -1,4 +1,4 @@
-# TalkRoom v2.1.0
+# TalkRoom v2.1.1
 
 Six password-protected rooms: HK, FD, SEC, FB, BROADCAST, LOBBY.
 Normal rooms allow 15 active devices. Broadcast allows one controller plus 15 listeners.
@@ -56,3 +56,7 @@ Screen Wake Lock is requested while visible where supported; browser background 
 Supabase anonymous users persist independently of the expiring room sessions; administrators should monitor Auth usage.
 The standard Supabase leaked-password checker applies to Auth password accounts, not these custom shared room passwords.
 Security advisors still report private RLS tables with no policies (intentional default-deny; API-only access), old v1 anonymous policies (browser table grants have been revoked), and disabled Auth leaked-password protection. No new direct table access is granted.
+
+## v2.1.1 voice investigation
+
+An old in-flight presence snapshot no longer closes a newly authorized incoming call. Receiving a track no longer cancels the ICE connection watchdog: track creation does not prove packets can flow. The toolbar reports connected audio peers and timeout messages distinguish a missing answer from failed ICE connectivity. Receiving-side authorization errors are now visible. No TURN service has been configured. Local two-peer synthetic-audio testing is not a substitute for physical cross-network testing.

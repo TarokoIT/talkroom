@@ -1,5 +1,6 @@
 import {CONFIG} from './config.js';
 import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode} from './core.js';
+import {isVoiceConnected,voiceFailure,shouldPruneIncoming} from './voice-core.js';
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
  auth:{storage:window.sessionStorage,storageKey:'talkroom-auth-v2'},
@@ -148,6 +149,15 @@ function updateControls(){
  $('speaker-button').setAttribute('aria-pressed',String(speaker));
  $('speaker-button').textContent=speaker?'🔊 收聽開啟':'🔇 收聽關閉';
  $('voice-status').textContent=state?.role==='listener'?'收聽工作站 · 麥克風停用':mic?'正在向此房間發話':'麥克風已關閉'+(speaker?' · 仍可收聽':' · 收聽已關閉');
+ updateVoiceStatus();
+}
+function updateVoiceStatus(){
+ if(!state)return;
+ const sending=[...outgoing.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length;
+ const receiving=[...incoming.values()].filter(e=>isVoiceConnected(e.call.peerConnection)).length;
+ const targets=canTransmit(state.role)?voiceTargets(peers,state).length:0;
+ $('voice-status').textContent=(mic?'麥克風已開啟 · 語音接通 '+sending+'/'+targets+' 台':'麥克風已關閉')+
+  (speaker?' · 收聽連線 '+receiving+' 台':' · 收聽已關閉');
 }
 function render(data){
  peers=data.peers;
@@ -183,7 +193,7 @@ function render(data){
 }
 function sync(){
  if(!state)return Promise.resolve();if(syncTask)return syncTask;
- const current=state,epoch=generation;
+ const current=state,epoch=generation,snapshotStartedAt=performance.now();
  syncTask=(async()=>{
   try{
    const data=await rpc('sync',{mic,speaker,latest_message_id:messagesKey.split(',').at(-1)||null,history_revision:historyRevision});
@@ -191,12 +201,13 @@ function sync(){
    lastSync=Date.now();render(data);historyRevision=data.history_revision??null;
    status(peer?.disconnected?'資料已連線 · 語音重新連線中':'● 房間已連線 · '+current.username);
    for(const [id,entry] of incoming){
-    if(!peers.some(p=>p.id===id&&p.mic))closeEntry(incoming,id,entry);
+    if(shouldPruneIncoming(peers,id,entry.acceptedAt,snapshotStartedAt))closeEntry(incoming,id,entry);
    }
    for(const [id,entry] of outgoing){
     if(!peers.some(p=>p.id===id))closeEntry(outgoing,id,entry);
    }
    if(mic&&canTransmit(current.role))for(const dest of voiceTargets(peers,current))startCall(dest,epoch);
+   updateVoiceStatus();
   }catch(e){
    if(state!==current)return;
    status('連線中斷，正在重試…');
@@ -214,13 +225,18 @@ function closeEntry(map,id,entry){
  try{entry.call.close();}catch{}
 }
 function watchCall(map,id,call){
- const entry={call,audio:null,timeout:null};map.set(id,entry);
+ const entry={call,audio:null,timeout:null,acceptedAt:performance.now()};map.set(id,entry);
  const cleanup=()=>closeEntry(map,id,entry);
  call.on('close',cleanup);call.on('error',()=>{cleanup();report('語音連線失敗，將自動重試；跨網路可能需要 TURN。');});
+ call.on('iceStateChanged',()=>{
+  if(map.get(id)!==entry)return;
+  if(isVoiceConnected(call.peerConnection))clearTimeout(entry.timeout);
+  updateVoiceStatus();
+ });
  entry.timeout=setTimeout(()=>{
   const pc=call.peerConnection;
-  if(!pc||!['connected','completed'].includes(pc.iceConnectionState)){
-   cleanup();report('語音未能接通，正在重試。請確認網路連線。');
+  if(!isVoiceConnected(pc)){
+   const reason=voiceFailure(pc);cleanup();report(reason);updateVoiceStatus();
   }
  },20000);
  return entry;
@@ -248,14 +264,14 @@ async function acceptCall(call){
   const entry=watchCall(incoming,result.sender,call);
   call.on('stream',remote=>{
    if(epoch!==generation||incoming.get(result.sender)!==entry)return;
-   clearTimeout(entry.timeout);
+   // A remote track can arrive before ICE connects; keep the connection watchdog running.
    watchAudio(result.sender,remote);
    const audio=document.createElement('audio');audio.autoplay=true;audio.setAttribute('playsinline','');
    audio.srcObject=remote;audio.muted=!speaker;entry.audio=audio;$('audio-container').append(audio);
    audio.play().catch(()=>{$('resume-audio').hidden=false;});
   });
   call.answer(); // One-way receive: listeners never return a microphone stream.
- }catch{call.close();}
+ }catch(e){call.close();if(epoch===generation&&state)report('語音邀請驗證未通過：'+errorText(e));}
 }
 function stopSending(){
  mic=false;if(stream)for(const track of stream.getAudioTracks())track.enabled=false;

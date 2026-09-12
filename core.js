@@ -1,4 +1,4 @@
-export const VERSION='2.1.0';
+export const VERSION='2.1.1';
 export const ROOMS=[
  {code:'HK',title:'房務部',icon:'⌂',description:'HOUSEKEEPING'},
  {code:'FD',title:'櫃台',icon:'▣',description:'FRONT DESK'},
