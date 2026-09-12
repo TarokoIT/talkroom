@@ -1,7 +1,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing} from '../voice-core.js';
+import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing,authorizedVoicePeer} from '../voice-core.js';
 import {channelLabel} from '../core.js';
+test('direct voice only accepts recent server-listed room members and broadcast controller',()=>{
+ const member={id:'other',peer_id:'peer-other',role:'member'};
+ const state={session_id:'self',room:'HK',role:'member'};
+ assert.equal(authorizedVoicePeer([member],state,'peer-other',2000),member);
+ assert.equal(authorizedVoicePeer([member],state,'unknown',2000),null);
+ assert.equal(authorizedVoicePeer([member],state,'peer-other',10001),null);
+ assert.equal(authorizedVoicePeer([member],null,'peer-other',0),null);
+ assert.equal(authorizedVoicePeer([member],{...state,session_id:'other'},'peer-other',0),null);
+ const controller={...member,role:'controller'},listener={...state,room:'BROADCAST',role:'listener'};
+ assert.equal(authorizedVoicePeer([controller],listener,'peer-other',0),controller);
+ assert.equal(authorizedVoicePeer([member],listener,'peer-other',0),null);
+ assert.equal(authorizedVoicePeer([controller],{...listener,role:'controller'},'peer-other',0),null);
+ assert.equal(authorizedVoicePeer([controller],state,'peer-other',0),null);
+});
 test('duplex calls survive microphone mute but end when peer leaves',()=>{
  assert.equal(shouldPruneIncoming([{id:'a',mic:false}],'a',100,200,true),false);
  assert.equal(shouldPruneIncoming([],'a',100,200,true),true);

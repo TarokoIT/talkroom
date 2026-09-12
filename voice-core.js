@@ -8,3 +8,11 @@ export function shouldPruneIncoming(peers,id,acceptedAt,snapshotStartedAt,duplex
  return snapshotStartedAt>=acceptedAt&&!peers.some(p=>p.id===id&&(duplex||p.mic));
 }
 export function preferOutgoing(selfId,otherId){return selfId<otherId;}
+export function authorizedVoicePeer(peers,state,peerId,snapshotAge){
+ // Only use a recent server-authorized room roster, never caller metadata.
+ if(!state||snapshotAge<0||snapshotAge>10000)return null;
+ const sender=peers.find(p=>p.peer_id===peerId&&p.id!==state.session_id);
+ if(!sender)return null;
+ if(state.room==='BROADCAST')return state.role==='listener'&&sender.role==='controller'?sender:null;
+ return state.role==='member'&&sender.role==='member'?sender:null;
+}

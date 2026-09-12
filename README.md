@@ -30,10 +30,9 @@ The API derives the room, name and role from the server session; clients cannot 
 Room snapshots poll every two seconds; offline presence expires after 60 seconds and sessions expire after 16 hours.
 Join attempts are limited to 10/minute per authenticated identity, in addition to Supabase anonymous-signup rate limits.
 
-Normal rooms use the earlier duplex PeerJS audio architecture: a muted microphone is prepared on entry, one shared call carries both directions, and muting preserves the call. Broadcast remains one-way and listeners never return a microphone stream. Each newly initiated call requires a 30-second single-use server ticket tied to sender and recipient in the same room.
-Receivers validate the ticket before answering. Normal members answer with their prepared microphone stream and play audio arriving on either an outgoing or incoming call. Broadcast listeners answer without a stream; controller outgoing calls never play returned media.
-The backend denies listener transmission and cross-room tickets. Room snapshots remove calls from offline members; microphone-off members remain connected in normal rooms, with their received audio muted. Broadcast calls are removed when the controller stops transmitting.
-Normal microphone toggles only enable/disable the local audio track. Simultaneous calls converge to one shared connection.
+Normal rooms use direct PeerJS duplex calls: prepare a muted microphone on entry, call the peer ID from the authenticated room snapshot, and immediately answer with the prepared stream. No database request is awaited in the media offer/answer path. Microphone toggles preserve the duplex connection. Simultaneous offers converge to one call. Broadcast listeners answer without a microphone stream; controllers never play returned media.
+
+Incoming calls are accepted only from PeerJS IDs in the last successful server-filtered room snapshot (maximum age 10 seconds). Caller metadata is not trusted. Normal rooms accept only members; broadcast listeners accept only their controller. Unknown peers are rejected and callers retry; an initial roster race can delay a call. Snapshot pruning removes departed members and stops audio on authorization loss. This restores the original direct-media approach with a room-roster gate, rather than per-call single-use tickets. The trust boundary is the PeerJS server's peer-ID association and the recent roster, not a cryptographic per-call credential. A revoked session may persist until the next successful snapshot (normally 2 seconds; after a failed sync, connections close if the last success is over 10 seconds old). Existing ticket database functions remain unused; no database grants or RLS policies are changed.
 
 ## Operations
 
@@ -64,3 +63,9 @@ An old in-flight presence snapshot no longer closes a newly authorized incoming 
 ## v2.1.2 scoped restoration
 
 Restored ordinary-room duplex capture/answer/playback and the third STUN endpoint from bd9f9ec, adapted to existing room authorization and broadcast isolation. No database, password, record-search, deletion, or chat-composer changes. HK/FD/SEC/FB/LOBBY are displayed as 一號頻道/二號頻道/三號頻道/四號頻道/五號頻道; stored room keys are unchanged. All endpoints should reload the new client together because old clients still prune calls on microphone-off. Local browser testing uses two actual app instances with a mock database, real PeerJS signaling and synthetic audio; physical Wi-Fi/4G verification remains necessary. TURN preparation remains separate and inactive.
+
+## v2.1.3 direct voice restoration
+
+Removed the remaining ticket/accept RPC waits and ticket metadata requirement from the media path. Kept the original PeerJS 1.5.2 and three STUN endpoints, prepared microphone and immediate answer. Room, admin, records, composer and channel labels are preserved. All devices must exit and reload together: old clients require ticket metadata and cannot accept this client's direct offers. Browser synthetic-audio testing cannot certify physical phone/PC connectivity.
+
+Validation for v2.1.3: 11 committed Node tests pass. Two actual app instances with a mock room API, real PeerJS signaling and synthetic microphone audio passed simultaneous duplex send/receive, mute/unmute retention, leave cleanup, and broadcast receive-only/stop tests. No physical handset or 4G test was available to the agent.

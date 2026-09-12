@@ -1,6 +1,6 @@
 import {CONFIG} from './config.js';
-import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.1.2';
-import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing} from './voice-core.js?v=2.1.2';
+import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.1.3';
+import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing,authorizedVoicePeer} from './voice-core.js?v=2.1.3';
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
  auth:{storage:window.sessionStorage,storageKey:'talkroom-auth-v2'},
@@ -9,7 +9,7 @@ const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
 let selected='HK',state=null,peer=null,stream=null,mic=false,speaker=true;
 let timer=null,syncTask=null,peers=[],messagesKey='',generation=0,lastSync=0;
 let audioContext=null,wakeLock=null,joining=false,micBusy=false;
-const outgoing=new Map(),incoming=new Map(),pending=new Set();
+const outgoing=new Map(),incoming=new Map();
 const catalog=new Map();let catalogBusy=false;
 let historyRevision=null;
 const meters=new Map();
@@ -242,7 +242,7 @@ function closeEntry(map,id,entry){
 function watchCall(map,id,call){
  const entry={call,audio:null,timeout:null,acceptedAt:performance.now()};map.set(id,entry);
  const cleanup=()=>closeEntry(map,id,entry);
- call.on('close',cleanup);call.on('error',()=>{cleanup();report('語音連線失敗，將自動重試；跨網路可能需要 TURN。');});
+ call.on('close',cleanup);call.on('error',()=>{cleanup();report('語音連線失敗，正在重新連線。');});
  call.on('iceStateChanged',()=>{
   if(map.get(id)!==entry)return;
   if(isVoiceConnected(call.peerConnection))clearTimeout(entry.timeout);
@@ -256,38 +256,36 @@ function watchCall(map,id,call){
  },45000);
  return entry;
 }
-async function startCall(dest,epoch){
- if(outgoing.has(dest.id)||(state?.room!=='BROADCAST'&&incoming.has(dest.id))||pending.has(dest.id)||!mic||peer?.disconnected)return;
- pending.add(dest.id);
+function startCall(dest,epoch){
+ if(epoch!==generation||!state||outgoing.has(dest.id)||(state.room!=='BROADCAST'&&incoming.has(dest.id))||!mic||peer?.disconnected)return;
  try{
-  const ticket=await rpc('ticket',{recipient:dest.id});
-  if(epoch!==generation||!state||!mic||(state.room!=='BROADCAST'&&incoming.has(dest.id)))return;
-  const call=peer.call(ticket.peer_id,stream,{metadata:{ticket:ticket.ticket,version:2}});
+  // As in the original client, send the media offer directly. The destination
+  // comes exclusively from our authenticated, server-filtered room snapshot.
+  const call=peer.call(dest.peer_id,stream);
   if(!call)throw new Error('無法建立語音連線');
   const entry=watchCall(outgoing,dest.id,call);
   if(state.room!=='BROADCAST')attachRemoteAudio(outgoing,dest.id,entry,epoch);
  }catch(e){if(epoch===generation&&state)report(e);}
- finally{pending.delete(dest.id);}
 }
-async function acceptCall(call){
+function acceptCall(call){
  const epoch=generation;
- if(!state||call.metadata?.version!==2||typeof call.metadata?.ticket!=='string'){call.close();return;}
+ const sender=authorizedVoicePeer(peers,state,call.peer,Date.now()-lastSync);
+ if(!sender){call.close();return;}
  try{
-  const result=await rpc('accept',{ticket:call.metadata.ticket,peer_id:call.peer});
-  if(epoch!==generation||!state){call.close();return;}
   if(state.room!=='BROADCAST'){
-   const existing=outgoing.get(result.sender);
+   const existing=outgoing.get(sender.id);
    if(existing){
     // Simultaneous offers converge to one shared duplex call instead of duplicate audio.
-    if(preferOutgoing(state.session_id,result.sender)){call.close();return;}
-    closeEntry(outgoing,result.sender,existing);
+    if(preferOutgoing(state.session_id,sender.id)){call.close();return;}
+    closeEntry(outgoing,sender.id,existing);
    }
   }
-  const old=incoming.get(result.sender);if(old)closeEntry(incoming,result.sender,old);
-  const entry=watchCall(incoming,result.sender,call);
-  attachRemoteAudio(incoming,result.sender,entry,epoch);
+  const old=incoming.get(sender.id);if(old)closeEntry(incoming,sender.id,old);
+  const entry=watchCall(incoming,sender.id,call);
+  attachRemoteAudio(incoming,sender.id,entry,epoch);
+  // Do not await a database request between PeerJS's offer event and answer.
   call.answer(state.room==='BROADCAST'?undefined:stream);
- }catch(e){call.close();if(epoch===generation&&state)report('語音邀請驗證未通過：'+errorText(e));}
+ }catch(e){call.close();if(epoch===generation&&state)report('語音接聽失敗：'+errorText(e));}
 }
 function attachRemoteAudio(map,id,entry,epoch){
   entry.call.on('stream',remote=>{
@@ -345,7 +343,7 @@ $('message-form').addEventListener('submit',async event=>{
 async function leave(notify=true){
  const old=state;state=null;generation++;clearInterval(timer);timer=null;stopSending();
  for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);
- pending.clear();stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
+ stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
  for(const id of meters.keys())removeMeter(id);
  $('audio-container').replaceChildren();$('chat-win').replaceChildren();$('user-list').replaceChildren();
  $('room-screen').hidden=true;$('login-screen').hidden=false;$('password').value='';
