@@ -93,16 +93,16 @@ async function rpc(action,payload={},session=state?.session_id){
  if(!data?.ok)throw new Error(data?.error||'伺服器未回應，請稍後重試');
  return data;
 }
-function createPeer(){
+function createPeer(peerId,iceServers){
  return new Promise((resolve,reject)=>{
-  const instance=new window.Peer({config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]}});
+  const instance=new window.Peer(peerId,{config:{iceServers,iceTransportPolicy:'relay'}});
   peer=instance;
   const timeout=setTimeout(()=>{instance.destroy();reject(new Error('語音服務連線逾時，請再試一次'));},15000);
   instance.once('open',id=>{clearTimeout(timeout);resolve(id);});
   instance.on('call',call=>acceptCall(call));
   instance.on('error',e=>{
    clearTimeout(timeout);
-   if(!state)reject(new Error('語音服務無法連線：'+e.type));
+   if(!instance.open)reject(new Error('語音服務無法連線：'+e.type));
    else report('語音連線問題：'+e.type+'。若持續無聲，請退出後重新進入。');
   });
   instance.on('disconnected',()=>{
@@ -134,9 +134,14 @@ $('login-form').addEventListener('submit',async event=>{
   }
   const {data:authData,error:authError}=await client.auth.getSession();if(authError)throw authError;
   if(!authData.session){const {error}=await client.auth.signInAnonymously();if(error)throw error;}
-  const peerId=await createPeer();
+  const peerId='trcandidate-'+crypto.randomUUID();
   const joined=await rpc('join',{room,role,username,password,peer_id:peerId},null);
   state={...joined,username,peer_id:peerId};generation++;mic=false;speaker=true;peers=[];messagesKey='';historyRevision=null;
+  const {data:iceServers,error:turnError}=await client.rpc('talkroom_candidate_turn',{p_session:state.session_id});
+  if(turnError)throw new Error('TURN 設定取得失敗，請重新登入測試房');
+  if(!Array.isArray(iceServers)||!iceServers.some(s=>/^turns?:/.test(s.urls)))throw new Error('TURN 設定不完整');
+  await createPeer(peerId,iceServers);
+  diag('turn-mode',{policy:'relay',serverCount:iceServers.length});
   $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;
   if(stream)watchAudio(state.session_id,stream);
   $('room-title').textContent=joined.title;$('room-code').textContent=channelLabel(joined.room);
@@ -373,8 +378,8 @@ setInterval(async()=>{
  if(pc?.iceConnectionState==='disconnected')entry.disconnectedAt??=now;else entry.disconnectedAt=null;
  const reason=staleCallReason(pc,entry.acceptedAt,entry.disconnectedAt,now);
  if(reason){closeEntry(outgoing,entry.id,entry,reason);updateVoiceStatus();continue;}if(!pc)continue;
- try{let sent=0,received=0,energy=0;for(const v of (await pc.getStats()).values()){if(v.type==='outbound-rtp')sent+=v.bytesSent||0;if(v.type==='inbound-rtp'){received+=v.bytesReceived||0;energy+=v.totalAudioEnergy||0;}}
- rows.push({call:entry.number,member:entry.id.slice(0,8),direction:entry.direction,playing:entry.audio?!entry.audio.paused:null,muted:entry.audio?.muted??null,ICE:pc.iceConnectionState,SDP:pc.signalingState,sentBytes:sent,receivedBytes:received,audioEnergy:energy});}catch{}}
+ try{let sent=0,received=0,energy=0,pair='none';const reports=await pc.getStats();for(const v of reports.values()){if(v.type==='transport'&&v.selectedCandidatePairId){const p=reports.get(v.selectedCandidatePairId);pair=(reports.get(p?.localCandidateId)?.candidateType||'?')+' → '+(reports.get(p?.remoteCandidateId)?.candidateType||'?');}if(v.type==='outbound-rtp')sent+=v.bytesSent||0;if(v.type==='inbound-rtp'){received+=v.bytesReceived||0;energy+=v.totalAudioEnergy||0;}}
+ rows.push({call:entry.number,member:entry.id.slice(0,8),direction:entry.direction,playing:entry.audio?!entry.audio.paused:null,muted:entry.audio?.muted??null,ICE:pc.iceConnectionState,SDP:pc.signalingState,pair,policy:pc.getConfiguration().iceTransportPolicy,sentBytes:sent,receivedBytes:received,audioEnergy:energy});}catch{}}
  diagnosticSample=rows;$('diagnostic-stats').textContent=JSON.stringify(rows,null,2);
 },1000);
-$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'candidate-2',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
+$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'candidate-3-turn',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
