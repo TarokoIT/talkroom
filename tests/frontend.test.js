@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {ROOMS,VERSION,roleFor,canTransmit,voiceTargets,messageNode} from '../core.js';
 test('six required rooms and version',()=>{
  assert.deepEqual(ROOMS.map(r=>r.code),['HK','FD','SEC','FB','LOBBY','BROADCAST']);
- assert.equal(VERSION,'2.3.0');
+ assert.equal(VERSION,'2.4.0');
 });
 test('broadcast listener cannot transmit; departments cannot pick controller role',()=>{
  assert.equal(canTransmit('listener'),false);

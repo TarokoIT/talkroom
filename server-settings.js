@@ -9,9 +9,10 @@ export function setupServerSettings(client){
   snapshot=data;$('server-lamps').replaceChildren();$('server-list').replaceChildren();$('route-list').replaceChildren();
   for(const s of data.servers){
    const state=lamp(s),active=data.routes.filter(r=>r.active_slot===s.slot).map(r=>data.rooms.find(x=>x.code===r.room)?.title||r.room);
-   const light=el('button',s.slot+' · '+state.text,'server-lamp '+state.color+(active.length?' active':''));light.type='button';light.title=(s.label||s.slot)+'；'+(active.length?'目前指派：'+active.join('、'):'未指派');light.onclick=()=>{show('servers');$('server-'+s.slot).scrollIntoView({behavior:'smooth'});};$('server-lamps').append(light);
+   const light=el('button','','server-lamp '+state.color+(active.length?' active':''));light.type='button';light.title=(s.label||s.slot)+'；'+(active.length?'目前指派：'+active.join('、'):'未指派');light.onclick=()=>{show('servers');$('server-'+s.slot).scrollIntoView({behavior:'smooth'});};$('server-lamps').append(light);
    const form=el('form',undefined,'entry-panel');form.id='server-'+s.slot;form.append(el('h2',s.slot+' · '+(s.label||'未設定')));
    const caps=[s.quota_mb,s.provider_quota_mb].filter(v=>v!=null).map(Number),cap=caps.length?Math.min(...caps):null;
+   light.append(el('strong',s.slot),el('span',(s.usage_mb==null?'?':Number(s.usage_mb).toFixed(1))+'/'+(cap??'∞')),el('span',s.usage_mb!=null&&cap>0?(100*s.usage_mb/cap).toFixed(1)+'%':'—'));light.setAttribute('aria-label',s.slot+'：'+state.text+'；用量單位 MB');light.title+='；用量單位 MB；'+state.text;
    form.append(el('p',(s.usage_mb==null?'用量未知':Number(s.usage_mb).toFixed(2)+' MB 已用')+' / '+(cap??'未限制')+' MB'+(cap!==null&&s.usage_mb!==null?'；剩餘 '+Math.max(0,cap-s.usage_mb).toFixed(2)+' MB':'')+'；'+(s.usage_at?'查詢／手動更新：'+new Date(s.usage_at).toLocaleString('zh-TW'):'尚未查詢'),'hint'));
    if(s.error)form.append(el('p',s.error,'error'));
    const label=input(form,'名稱','text',s.label);label.maxLength=60;

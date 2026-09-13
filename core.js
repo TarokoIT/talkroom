@@ -1,5 +1,5 @@
-export const VERSION='2.3.0';
-export function channelLabel(code){return ({HK:'一號頻道',FD:'二號頻道',SEC:'三號頻道',FB:'四號頻道',LOBBY:'五號頻道',BROADCAST:'廣播頻道'})[code]||code;}
+export const VERSION='2.4.0';
+export function channelLabel(code){return ({HK:'一號頻道',FD:'二號頻道',SEC:'三號頻道',FB:'四號頻道',LOBBY:'五號頻道',BROADCAST:'廣播頻道',VOICE_TEST:'測試房'})[code]||code;}
 export const ROOMS=[
  {code:'HK',title:'房務部',icon:'⌂',description:'HOUSEKEEPING'},
  {code:'FD',title:'櫃台',icon:'▣',description:'FRONT DESK'},

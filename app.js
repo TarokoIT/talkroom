@@ -1,7 +1,8 @@
-import {deviceInfo} from './device-info.js?v=2.3.0';
+import {setupMessageResponses} from './message-responses.js?v=2.4.0';
+import {deviceInfo} from './device-info.js?v=2.4.0';
 import {staleCallReason} from './candidate-health.js?v=2';
 import {CONFIG} from './config.js';
-import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.3.0';
+import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './core.js?v=2.4.0';
 import {isVoiceConnected,voiceFailure,shouldPruneIncoming,preferOutgoing,authorizedVoicePeer} from './voice-core.js?v=2.1.3';
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
@@ -15,6 +16,7 @@ let audioContext=null,wakeLock=null,joining=false,micBusy=false;
 const outgoing=new Map(),incoming=outgoing,allCalls=new Set(),mediaElements=new Map();
 const catalog=new Map();let catalogBusy=false;
 let historyRevision=null;
+const responses=setupMessageResponses(client,()=>state);
 const meters=new Map();
 function removeMeter(id){const meter=meters.get(id);if(meter){meter.source.disconnect();meter.analyser.disconnect();meters.delete(id);}}
 function watchAudio(id,media){
@@ -142,7 +144,7 @@ $('login-form').addEventListener('submit',async event=>{
   const turn=await fetchTurn();
   await createPeer(peerId,turn.iceServers);turnKey=turn.slot+':'+turn.revision;
   turnTimer=setInterval(checkTurn,60000);
-  const auditSession=state.session_id;deviceInfo('2.3.0').then(info=>client.rpc('talkroom_device_context',{p_session:auditSession,p_client:info})).catch(()=>{});
+  const auditSession=state.session_id;deviceInfo('2.4.0').then(info=>client.rpc('talkroom_device_context',{p_session:auditSession,p_client:info})).catch(()=>{});
   diag('turn-mode',{policy:'relay',slot:turn.slot,serverCount:turn.iceServers.length});
   $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;document.body.classList.remove('login-view');
   if(stream)watchAudio(state.session_id,stream);
@@ -201,7 +203,8 @@ function render(data){
   if(messagesKey&&data.messages.some(m=>!previousIds.has(m.id)&&m.session_id!==state.session_id))ding();
   win.replaceChildren();
   if(!data.messages.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='此房間還沒有訊息。';win.append(empty);}
-  else for(const m of data.messages)win.append(messageNode(document,m,state.session_id));
+  else for(const m of data.messages){const node=messageNode(document,m,state.session_id);responses.bind(node,m);win.append(node);}
+  responses.reconcile(data.messages);
   if(atBottom||!messagesKey)win.scrollTop=win.scrollHeight;
   messagesKey=nextKey;
  }
@@ -341,7 +344,7 @@ $('message-form').addEventListener('submit',async event=>{
  catch(e){report(e);}finally{$('send-button').disabled=false;}
 });
 async function leave(notify=true){
- clearInterval(turnTimer);turnTimer=null;turnKey='';turnResumeMic=null;const old=state;state=null;generation++;clearInterval(timer);timer=null;stopSending();
+ clearInterval(turnTimer);turnTimer=null;turnKey='';turnResumeMic=null;const old=state;responses.reset();state=null;generation++;clearInterval(timer);timer=null;stopSending();
  for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);
  stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
  for(const id of meters.keys())removeMeter(id);
@@ -383,17 +386,12 @@ setInterval(async()=>{
  rows.push({call:entry.number,member:entry.id.slice(0,8),direction:entry.direction,playing:entry.audio?!entry.audio.paused:null,muted:entry.audio?.muted??null,ICE:pc.iceConnectionState,SDP:pc.signalingState,pair,policy:pc.getConfiguration().iceTransportPolicy,sentBytes:sent,receivedBytes:received,audioEnergy:energy});}catch{}}
  diagnosticSample=rows;$('diagnostic-stats').textContent=JSON.stringify(rows,null,2);
 },1000);
-$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'2.3.0-turn',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
+$('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'2.4.0-turn',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
 
 async function interaction(action,target=null){
  const {data,error}=await client.rpc('talkroom_interact',{p_session:state?.session_id,p_action:action,p_target:target});
  if(error)throw error;return data;
 }
-$('ack-button').addEventListener('click',async()=>{
- if(!state)return;$('ack-button').disabled=true;
- try{await interaction('ack');$('room-error').textContent='';await sync();}
- catch(e){report(e);}finally{$('ack-button').disabled=false;}
-});
 let lastTap={id:null,at:0},beepBusy=false,attentionBusy=false;
 $('user-list').addEventListener('click',async event=>{
  const tag=event.target.closest('[data-session]');if(!state||!tag||tag.dataset.session===state.session_id)return;
