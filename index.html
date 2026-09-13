@@ -12,7 +12,7 @@
 </head>
 <body class="talk-app login-view">
  <main id="login-screen" class="lobby">
-  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.2.0</span></header>
+  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">v2.3.0</span></header>
   <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>選擇頻道，開始通訊。</h1><p>部門對講與工作站廣播，讓每一句話到達對的人。</p></div>
   <form id="login-form" class="login-layout">
    <fieldset class="room-section"><legend>01　選擇房間</legend><div id="rooms" class="room-grid"></div><p id="catalog-status" class="catalog-note" role="status"></p></fieldset>
@@ -23,13 +23,13 @@
     <label for="password" id="password-label">房間密碼</label><input id="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="輸入此房間的密碼" required>
     <button id="join-button" class="primary" type="submit">進入房務部 <span aria-hidden="true">→</span></button>
     <p id="login-status" role="status" aria-live="polite" class="status-text"></p>
-    <p class="privacy-note">每個房間的訊息與語音獨立。廣播只傳送至廣播頻道。</p>
+    <p class="privacy-note">登入會記錄 IP 請求資訊、瀏覽器與裝置資料，供管理員維運查詢；不錄音。每個房間訊息與語音獨立。</p>
    </section>
   </form>
-  <p style="text-align:center"><a href="candidate.html">🧪 第七房：語音測試（候選版）</a></p><footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.2.0 · 2026.09.13</span></footer>
+  <p style="text-align:center"><a href="candidate.html">🧪 第七房：語音測試（候選版）</a></p><footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 v2.3.0 · 2026.09.13</span></footer>
  </main>
  <main id="room-screen" class="room-screen" hidden>
-  <header class="room-header"><div class="room-heading"><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.2.0</span><button id="leave-button" class="secondary">退出房間</button></div></header>
+  <header class="room-header"><div class="room-heading"><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">v2.3.0</span><button id="leave-button" class="secondary">退出房間</button></div></header>
   <div class="connection-bar"><span id="member-count" class="member-count"></span><span id="connection-status" role="status" aria-live="polite">正在連線…</span><button id="resume-audio" class="secondary" hidden>點此啟用收聽</button></div>
   <section id="broadcast-banner" class="broadcast-banner" hidden><span class="broadcast-icon" aria-hidden="true">◉</span><div><strong id="broadcast-state">等待控制台</strong><p id="broadcast-detail">此工作站只接收廣播頻道音訊。</p></div></section>
   <section class="presence"><div id="user-list" class="user-list" aria-label="成員，雙擊其他成員可發出提示音"></div><p id="attention-status" role="status" class="hint"></p></section>

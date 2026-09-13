@@ -1,3 +1,4 @@
+import {deviceInfo} from './device-info.js?v=2.3.0';
 import {staleCallReason} from './candidate-health.js?v=2';
 import {CONFIG} from './config.js';
 import {ROOMS,canTransmit,roleFor,voiceTargets,messageNode,channelLabel} from './candidate-core.js?v=1';
@@ -7,6 +8,7 @@ const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{
  auth:{storage:window.sessionStorage,storageKey:'talkroom-candidate-auth'},
  global:{fetch:(url,options={})=>fetch(url,{...options,signal:options.signal||AbortSignal.timeout(15000)})}
 });
+let turnKey='',turnTimer=null,turnBusy=false,turnResumeMic=null;
 let selected='VOICE_TEST',state=null,peer=null,stream=null,mic=false,speaker=true;
 let timer=null,syncTask=null,peers=[],messagesKey='',generation=0,lastSync=0;
 let audioContext=null,wakeLock=null,joining=false,micBusy=false,toneCleanup=null;
@@ -137,11 +139,11 @@ $('login-form').addEventListener('submit',async event=>{
   const peerId='trcandidate-'+crypto.randomUUID();
   const joined=await rpc('join',{room,role,username,password,peer_id:peerId},null);
   state={...joined,username,peer_id:peerId};generation++;mic=false;speaker=true;peers=[];messagesKey='';historyRevision=null;
-  const {data:iceServers,error:turnError}=await client.rpc('talkroom_candidate_turn',{p_session:state.session_id});
-  if(turnError)throw new Error('TURN 設定取得失敗，請重新登入測試房');
-  if(!Array.isArray(iceServers)||!iceServers.some(s=>/^turns?:/.test(s.urls)))throw new Error('TURN 設定不完整');
-  await createPeer(peerId,iceServers);
-  diag('turn-mode',{policy:'relay',serverCount:iceServers.length});
+  const turn=await fetchTurn();
+  await createPeer(peerId,turn.iceServers);turnKey=turn.slot+':'+turn.revision;
+  turnTimer=setInterval(checkTurn,60000);
+  const auditSession=state.session_id;deviceInfo('2.3.0').then(info=>client.rpc('talkroom_device_context',{p_session:auditSession,p_client:info})).catch(()=>{});
+  diag('turn-mode',{policy:'relay',slot:turn.slot,serverCount:turn.iceServers.length});
   $('password').value='';$('login-status').textContent='';$('login-screen').hidden=true;$('room-screen').hidden=false;
   if(stream)watchAudio(state.session_id,stream);
   $('room-title').textContent=joined.title;$('room-code').textContent=channelLabel(joined.room);
@@ -219,7 +221,7 @@ function sync(){
    const data=await rpc('sync',{mic,speaker,latest_message_id:messagesKey.split(',').at(-1)||null,history_revision:historyRevision});
    if(state!==current||epoch!==generation)return;
    lastSync=Date.now();render(data);historyRevision=data.history_revision??null;
-   for(const entry of allCalls)if(!peers.some(p=>p.id===entry.id)){diag('roster-removes-call');closeEntry(outgoing,entry.id,entry,'member-left');}
+   for(const entry of allCalls)if(!peers.some(p=>p.id===entry.id&&p.peer_id===entry.call.peer)){diag('roster-removes-call');closeEntry(outgoing,entry.id,entry,'member-left');}
    updateRemoteMute();
    status(peer?.disconnected?'資料已連線 · 語音重新連線中':'● 房間已連線 · '+current.username);
    for(const [id,entry] of incoming){
@@ -300,7 +302,7 @@ function stopSending(){
 }
 $('mic-button').addEventListener('click',async()=>{
  if(!state||!canTransmit(state.role)||micBusy)return;
- micBusy=true;$('mic-button').disabled=true;const epoch=generation;
+ turnResumeMic=null;micBusy=true;$('mic-button').disabled=true;const epoch=generation;
  try{
   if(mic)stopSending();
   else{
@@ -337,7 +339,7 @@ $('message-form').addEventListener('submit',async event=>{
  catch(e){report(e);}finally{$('send-button').disabled=false;}
 });
 async function leave(notify=true){
- toneCleanup?.();toneCleanup=null;const old=state;state=null;generation++;clearInterval(timer);timer=null;stopSending();
+ toneCleanup?.();toneCleanup=null;clearInterval(turnTimer);turnTimer=null;turnKey='';turnResumeMic=null;const old=state;state=null;generation++;clearInterval(timer);timer=null;stopSending();
  for(const map of [incoming,outgoing])for(const [id,entry] of map)closeEntry(map,id,entry);
  stream?.getTracks().forEach(t=>t.stop());stream=null;peer?.destroy();peer=null;
  for(const id of meters.keys())removeMeter(id);
@@ -383,3 +385,20 @@ setInterval(async()=>{
  diagnosticSample=rows;$('diagnostic-stats').textContent=JSON.stringify(rows,null,2);
 },1000);
 $('diagnostic-export').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify({version:'candidate-3-turn',events:diagnosticEvents,connections:diagnosticSample},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='candidate-voice.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
+async function fetchTurn(){
+ const {data,error}=await client.functions.invoke('turn-pool',{body:{session_id:state?.session_id}});
+ if(error||data?.error||!Array.isArray(data?.iceServers))throw Error(data?.error||'TURN 設定取得失敗，請稍後再試');
+ return data;
+}
+async function checkTurn(){
+ if(!state||turnBusy)return;turnBusy=true;const session=state;
+ try{const next=await fetchTurn();if(state!==session||next.slot+':'+next.revision===turnKey)return;
+ turnResumeMic??=mic;generation++;stopSending();peer?.destroy();peer=null;
+ status('正在切換至 TURN '+next.slot+'…');await new Promise(r=>setTimeout(r,500));if(state!==session)return;
+ const nextPeer='talkroom-'+crypto.randomUUID();
+ const {error}=await client.rpc('talkroom_turn_rebind',{p_session:session.session_id,p_peer:nextPeer});if(error)throw error;
+ session.peer_id=nextPeer;await createPeer(nextPeer,next.iceServers);if(state!==session)return;
+ turnKey=next.slot+':'+next.revision;mic=turnResumeMic??mic;turnResumeMic=null;stream?.getAudioTracks().forEach(t=>t.enabled=mic);updateControls();
+ diag('turn-switched',{slot:next.slot,revision:next.revision});await sync();
+ }catch(e){if(state===session)report(e);}finally{turnBusy=false;}
+}

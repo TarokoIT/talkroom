@@ -1,3 +1,10 @@
+## v2.3.0 — 2026-09-13
+
+- Add admin A–G TURN slots, safe ICE/TXT import, provider quota snapshots, manual static-server usage, allocation probes, per-room routing and ordered quota failover. Current provider remains A.
+- Clients check routing each minute and rebind to a newly authorized Peer ID when rebuilding voice after a configuration change. Includes the seventh candidate room.
+- Capture new room sessions' request IP/proxy information, UA, browser-reported device metadata and server-derived auth method; add admin filtering and CSV export. No audio recording or historical backfill.
+- Validated SQL admin/owner isolation, rollback quota failover/exhaustion, safe imports and lamp thresholds; live deployed route API and IP/logout capture; browser live TURN reconfiguration and broadcast with a mock room/config backend. Cross-provider physical-device validation requires a second configured service.
+
 ## v2.2.0 — 2026-09-13
 
 - Promote the tested candidate voice lifecycle and authenticated TURN relay configuration to all six rooms. Broadcast stays receive-only for workstations.

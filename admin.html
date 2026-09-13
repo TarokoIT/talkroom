@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TalkRoom｜管理後台</title>
-<link rel="stylesheet" href="styles.css"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js?v=2.1.4"></script></head>
-<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">後台 v2.1.4</span></header>
+<link rel="stylesheet" href="styles.css?v=2.3.0"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js?v=2.3.0"></script></head>
+<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">後台 v2.3.0</span></header>
 <p><a href="./">← 返回通訊首頁</a></p>
 <section id="admin-login" class="entry-panel"><h1>管理員登入</h1><p>使用已驗證且獲授權的管理員 Email。房間密碼不能登入後台。</p>
 <form id="admin-login-form"><label for="admin-email">Email</label><input id="admin-email" type="email" autocomplete="username" required>
@@ -10,7 +10,9 @@
 <p class="hint">首次建立後，請到信箱驗證 Email，再回來登入。建立帳號不會自動取得管理權限。</p></section>
 <p id="admin-status" role="status" aria-live="polite"></p>
 <section id="admin-panel" hidden><div class="header-actions"><button id="admin-refresh" class="secondary">重新整理</button><button id="admin-signout" class="secondary">登出</button></div>
-<section class="entry-panel"><h2>TURN 中繼流量</h2><p id="usage-values"></p><p id="usage-status" role="status"></p><button id="usage-refresh" class="secondary">更新用量</button><p class="hint">Metered 帳號當期總用量（傳入＋傳出），並非個別房間統計。1 GB 以 1,000 MB 顯示；官方統計可能延遲。登入或按更新時查詢，不會持續自動監控。免費方案用完額度會停止中繼服務。</p></section>
+<section class="entry-panel"><h2>TURN 伺服器 A～G</h2><div id="server-lamps" class="server-lamps"></div><p id="pool-status" role="status"></p><button id="pool-refresh" class="secondary">更新伺服器用量</button><p class="hint">灰：未設定／停用；綠：低於50%；黃：50～95%；紅：超過95%；藍：用量未知／未設額度。黑框代表至少一個頻道目前選用。Metered 約每分鐘更新一次；同帳號的不同憑證共用額度。</p></section>
+<nav class="record-actions"><button class="secondary" data-admin-view="management">房間管理</button><button class="secondary" data-admin-view="servers">伺服器設定</button><button class="secondary" data-admin-view="devices">登入裝置紀錄</button></nav>
+<div id="management-view">
 <p class="hint">更改任一房間密碼會撤銷該房全部登入，包括廣播控制台與工作站。正常連線裝置會在下次同步時退出；員工須使用新密碼重新加入。</p>
 <div id="admin-rooms" class="admin-grid"></div>
 <section class="entry-panel records-panel"><h2>記錄搜尋與匯出</h2>
@@ -30,4 +32,5 @@
 <section class="entry-panel records-panel"><h2>清除文字記錄</h2><p class="admin-warning">永久清除「指定房間 AND 指定日期區間」的文字對話，不清除登入登出紀錄。請先匯出需要保留的資料。搜尋區的 OR／關鍵字不適用於此功能。</p>
 <form id="delete-form"><div class="filter-grid"><label>指定房間<select id="delete-room" required><option value="">請選擇一個房間</option></select></label><label>開始日期<input id="delete-from" type="date" required></label><label>結束日期<input id="delete-to" type="date" required></label></div>
 <div class="record-actions"><button class="secondary" id="delete-preview">預覽清除筆數</button><button class="danger" type="button" id="delete-confirm" disabled>確認永久清除</button></div></form><p id="delete-status" role="status"></p></section>
-</section></main></body></html>
+</div><section id="servers-view" hidden><h2>伺服器設定</h2><p>匯入只會上傳至已授權的後台，不會顯示原始金鑰。Metered 使用兩個 TXT；自建或其他服務接受含 urls、username、credential 的 ICE JSON，不需要 Metered 金鑰。其他廠商用量 API 尚未通用，請手動更新用量。</p><div id="server-list" class="admin-grid"></div><h2>頻道指派與備援</h2><p>額度達上限且有已設定備援時自動切換；官方用量有延遲，不保證切換前完全不中斷。自建的自動額度切換依手動填入的數值判斷。沒有在線裝置或管理頁查詢時，不會持續輪詢。</p><div id="route-list" class="admin-grid"></div></section>
+<section id="devices-view" hidden><h2>登入裝置紀錄</h2><p>從 v2.3.0 起收集。IP 為請求轉送資訊，可能是 NAT／VPN／代理；裝置欄位由瀏覽器回報，不能當身分證明。有效網速不代表實際 4G 或 Wi-Fi。舊紀錄無法補回。</p><div class="filter-grid"><label>房間<select id="device-room"></select></label><label>登入日期起<input id="device-from" type="date"></label><label>登入日期迄<input id="device-to" type="date"></label><label>姓名／IP／裝置關鍵字<input id="device-keyword"></label></div><div class="record-actions"><button id="device-search" class="primary">搜尋</button><button id="device-export" class="secondary">匯出 CSV</button></div><p id="device-status" role="status"></p><div class="table-scroll"><table class="records-table"><thead><tr><th>登入</th><th>登出</th><th>狀態</th><th>房間</th><th>姓名</th><th>角色</th><th>登入方式</th><th>IP／代理鏈</th><th>瀏覽器</th><th>裝置資料</th><th>使用者ID</th><th>工作階段ID</th></tr></thead><tbody id="device-results"></tbody></table></div><button id="device-prev" class="secondary" disabled>上一頁</button><button id="device-next" class="secondary" disabled>下一頁</button></section></section></main></body></html>

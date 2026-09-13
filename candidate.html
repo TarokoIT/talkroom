@@ -8,12 +8,12 @@
  <link rel="stylesheet" href="styles.css">
  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
  <script defer src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
- <script type="module" src="candidate-app.js?v=3"></script>
+ <script type="module" src="candidate-app.js?v=4"></script>
 </head>
 <body>
  <main id="login-screen" class="lobby">
-  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">候選測試 3 · TURN</span></header>
-  <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>第七房 · 語音測試</h1><p>強制 TURN 中繼測試。登入後自動取得連線設定；測試資料與其他六房分開。</p></div>
+  <header class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span>TalkRoom<small>內部通訊系統</small></span><span class="version">候選測試 4 · TURN</span></header>
+  <div class="intro"><span class="eyebrow">TEAM COMMUNICATION</span><h1>第七房 · 語音測試</h1><p>強制 TURN 中繼測試。登入後自動取得指定伺服器設定；測試資料與其他六房分開。</p></div>
   <form id="login-form" class="login-layout">
    <fieldset class="room-section"><legend>01　選擇房間</legend><div id="rooms" class="room-grid"></div><p id="catalog-status" class="catalog-note" role="status"></p></fieldset>
    <section class="entry-panel">
@@ -23,13 +23,13 @@
     <label for="password" id="password-label">房間密碼</label><input id="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="輸入此房間的密碼" required>
     <button id="join-button" class="primary" type="submit">進入房務部 <span aria-hidden="true">→</span></button>
     <p id="login-status" role="status" aria-live="polite" class="status-text"></p>
-    <p class="privacy-note">每個房間的訊息與語音獨立。廣播只傳送至廣播頻道。</p>
+    <p class="privacy-note">登入會記錄 IP 請求資訊、瀏覽器與裝置資料，供管理員維運查詢；不錄音。</p>
    </section>
   </form>
-  <footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 候選測試 3 · TURN · 2026.09.13</span></footer>
+  <footer class="lobby-footer"><a href="admin.html">管理後台</a><span>網頁版 候選測試 4 · TURN · 2026.09.13</span></footer>
  </main>
  <main id="room-screen" class="room-screen" hidden>
-  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">候選測試 3 · TURN</span><button id="leave-button" class="secondary">退出房間</button></div></header>
+  <header class="room-header"><div><span id="room-code" class="eyebrow"></span><h1 id="room-title"></h1></div><div class="header-actions"><span class="version">候選測試 4 · TURN</span><button id="leave-button" class="secondary">退出房間</button></div></header>
   <div class="connection-bar"><span id="connection-status" role="status" aria-live="polite">正在連線…</span><button id="resume-audio" class="secondary" hidden>點此啟用收聽</button></div>
   <section id="broadcast-banner" class="broadcast-banner" hidden><span class="broadcast-icon" aria-hidden="true">◉</span><div><strong id="broadcast-state">等待控制台</strong><p id="broadcast-detail">此工作站只接收廣播頻道音訊。</p></div></section>
   <section class="presence"><div class="section-label"><span>房間成員</span><span id="member-count"></span></div><div id="user-list" class="user-list"></div></section>
