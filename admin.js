@@ -2,6 +2,7 @@ import {setupServerSettings} from './server-settings.js?v=2.4.0';
 import {channelLabel} from './core.js?v=2.1.2';
 import {CONFIG} from './config.js';
 const $=id=>document.getElementById(id);
+let recovering=new URLSearchParams(location.hash.slice(1)).get('type')==='recovery';
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{auth:{storage:sessionStorage,storageKey:'talkroom-admin-auth'}});
 const serverSettings=setupServerSettings(client);
 let busy=false;
@@ -18,6 +19,7 @@ function field(label,type,value=''){
  wrapper.append(input);return {wrapper,input};
 }
 async function load(){
+ if(recovering){showRecovery();return;}
  const data=await api('list');$('admin-login').hidden=true;$('admin-panel').hidden=false;$('admin-rooms').replaceChildren();
  serverSettings.refresh();
  const order=['BROADCAST','HK','FD','SEC','FB','LOBBY','VOICE_TEST'];data.rooms.sort((a,b)=>order.indexOf(a.code)-order.indexOf(b.code));
@@ -70,4 +72,29 @@ $('admin-register').addEventListener('click',async()=>{
 });
 $('admin-refresh').addEventListener('click',()=>load().catch(e=>status(e.message)));
 $('admin-signout').addEventListener('click',async()=>{await client.auth.signOut();$('admin-panel').hidden=true;$('admin-login').hidden=false;$('admin-rooms').replaceChildren();status('已登出。');});
-client.auth.getSession().then(({data})=>{if(data.session)load().catch(e=>status(e.message));});
+function showRecovery(){
+ recovering=true;$('admin-login').hidden=true;$('admin-panel').hidden=true;$('password-recovery').hidden=false;status('請設定新密碼。');
+}
+client.auth.onAuthStateChange(event=>{if(event==='PASSWORD_RECOVERY')showRecovery();});
+$('admin-forgot').addEventListener('click',async()=>{
+ const email=$('admin-email');if(!email.reportValidity())return;$('admin-forgot').disabled=true;
+ try{const {error}=await client.auth.resetPasswordForEmail(email.value.trim(),{redirectTo:'https://tarokoit.github.io/talkroom/admin.html'});if(error)throw error;status('已提出寄送要求；若帳號存在，請至信箱開啟重設密碼信件。');}
+ catch(e){status(e.message);}finally{$('admin-forgot').disabled=false;}
+});
+$('recovery-form').addEventListener('submit',async e=>{
+ e.preventDefault();if(!recovering)return;
+ if($('new-password').value!==$('confirm-password').value){status('兩次密碼不一致，請重新輸入。');return;}
+ $('save-password').disabled=true;
+ try{
+  const {data,error:sessionError}=await client.auth.getSession();if(sessionError)throw sessionError;
+  if(!data.session)throw Error('重設連結已失效，請返回後台重新寄送重設信。');
+  const {error}=await client.auth.updateUser({password:$('new-password').value});if(error)throw error;
+  $('recovery-form').reset();await client.auth.signOut();recovering=false;
+  $('password-recovery').hidden=true;$('admin-login').hidden=false;history.replaceState(null,'',location.pathname);status('密碼已更新，請使用新密碼登入。');
+ }catch(e){status(e.message);}finally{$('save-password').disabled=false;}
+});
+client.auth.getSession().then(({data,error})=>{
+ if(error){status('重設連結無效或已過期，請重新寄送重設信。');return;}
+ if(recovering){showRecovery();return;}if(data.session)load().catch(e=>status(e.message));
+});
+
