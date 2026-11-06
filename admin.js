@@ -1,10 +1,12 @@
-import {setupServerSettings} from './server-settings.js?v=2.4.0';
+import {getAccess,canAccess} from './access-core.js?v=2.5.0';
+import {setupServerSettings} from './server-settings.js?v=2.5.0';
 import {channelLabel} from './core.js?v=2.1.2';
 import {CONFIG} from './config.js';
 const $=id=>document.getElementById(id);
 let recovering=new URLSearchParams(location.hash.slice(1)).get('type')==='recovery';
 const client=window.supabase.createClient(CONFIG.url,CONFIG.key,{auth:{storage:sessionStorage,storageKey:'talkroom-admin-auth'}});
-const serverSettings=setupServerSettings(client);
+const serverSettings=setupServerSettings(client,()=>grants);
+let grants=[];
 let busy=false;
 function status(text){$('admin-status').textContent=text;}
 async function api(action,payload={}){
@@ -20,10 +22,17 @@ function field(label,type,value=''){
 }
 async function load(){
  if(recovering){showRecovery();return;}
- const data=await api('list');$('admin-login').hidden=true;$('admin-panel').hidden=false;$('admin-rooms').replaceChildren();
- serverSettings.refresh();
+ const data=await getAccess(client);grants=data.permissions;$('admin-login').hidden=true;$('admin-panel').hidden=false;$('admin-rooms').replaceChildren();
+ for(const b of document.querySelectorAll('[data-admin-view]'))b.hidden=!canAccess(grants,({management:'rooms',servers:'servers',devices:'devices'})[b.dataset.adminView]+'.view');
+ $('records-link').hidden=!canAccess(grants,'records.view');$('permissions-link').hidden=!canAccess(grants,'permissions.view');$('turn-overview').hidden=!canAccess(grants,'servers.view');
+ for(const key of ['management','servers','devices'])$(key+'-view').hidden=true;
+ const first=['management','servers','devices'].find(v=>canAccess(grants,({management:'rooms',servers:'servers',devices:'devices'})[v]+'.view'));if(first)$(first+'-view').hidden=false;
+ if(!first)status('請選擇記錄搜尋或管理員權限頁面。');
+ const devices=$('device-room');devices.replaceChildren(new Option('全部房間',''));for(const room of data.rooms)devices.add(new Option(room.title,room.code));
+ $('device-export').hidden=!canAccess(grants,'devices.export');
+ if(canAccess(grants,'servers.view'))serverSettings.refresh();
  const order=['BROADCAST','HK','FD','SEC','FB','LOBBY','VOICE_TEST'];data.rooms.sort((a,b)=>order.indexOf(a.code)-order.indexOf(b.code));
- for(const room of data.rooms){
+ for(const room of (canAccess(grants,'rooms.view')?data.rooms:[])){
   const form=document.createElement('form');form.className='entry-panel';
   const title=document.createElement('h2');title.textContent=channelLabel(room.code);
   const count=document.createElement('p');count.className='hint';count.textContent='目前 '+room.online+' 台裝置在線';
@@ -51,6 +60,7 @@ async function load(){
    try{const result=await api('revoke',{room:room.code});status('已撤銷 '+result.revoked+' 個登入。');await load();}
    catch(error){status(error.message);}finally{busy=false;save.disabled=false;revoke.disabled=false;}
   });
+  name.input.disabled=!canAccess(grants,'rooms.edit');password.input.disabled=!canAccess(grants,'rooms.edit');if(controller)controller.input.disabled=!canAccess(grants,'rooms.edit');save.hidden=!canAccess(grants,'rooms.edit');revoke.hidden=!canAccess(grants,'rooms.revoke');
   $('admin-rooms').append(form);
  }
 }

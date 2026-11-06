@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TalkRoom｜管理後台</title>
-<link rel="stylesheet" href="styles.css?v=2.4.0"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js?v=2.4.1"></script></head>
-<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">後台 v2.4.0</span></header>
+<link rel="stylesheet" href="styles.css?v=2.4.0"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script><script type="module" src="admin.js?v=2.5.0"></script></head>
+<body><main class="lobby"><header class="brand"><span>TalkRoom<small>房間管理後台</small></span><span class="version">後台 v2.5.0</span></header>
 <p><a href="./">← 返回通訊首頁</a></p>
 <section id="admin-login" class="entry-panel"><h1>管理員登入</h1><p>使用已驗證且獲授權的管理員 Email。房間密碼不能登入後台。</p>
 <form id="admin-login-form"><label for="admin-email">Email</label><input id="admin-email" type="email" autocomplete="username" required>
@@ -10,8 +10,8 @@
 <p><button class="secondary" id="admin-forgot" type="button">忘記密碼／寄送重設信</button></p><p class="hint">首次建立後，請到信箱驗證 Email，再回來登入。建立帳號不會自動取得管理權限。</p></section>
 <section id="password-recovery" class="entry-panel" hidden><h1>設定新的管理員密碼</h1><p>請輸入至少 12 個字元的新密碼。此處只變更你的管理員登入密碼。</p><form id="recovery-form"><label>新密碼<input id="new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>再次輸入新密碼<input id="confirm-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><button id="save-password" class="primary">儲存新密碼</button></form></section><p id="admin-status" role="status" aria-live="polite"></p>
 <section id="admin-panel" hidden><div class="header-actions"><button id="admin-refresh" class="secondary">重新整理</button><button id="admin-signout" class="secondary">登出</button></div>
-<section class="entry-panel"><h2>TURN 伺服器 A～G</h2><div id="server-lamps" class="server-lamps"></div><p id="pool-status" role="status"></p><button id="pool-refresh" class="secondary">更新伺服器用量</button><p class="hint">灰：未設定／停用；綠：低於50%；黃：50～95%；紅：超過95%；藍：用量未知／未設額度。黑框代表至少一個頻道目前選用。Metered 約每分鐘更新一次；同帳號的不同憑證共用額度。</p></section>
-<nav class="record-actions"><button class="secondary" data-admin-view="management">房間管理</button><button class="secondary" data-admin-view="servers">伺服器設定</button><button class="secondary" data-admin-view="devices">登入裝置紀錄</button><a class="secondary" href="records.html">記錄搜尋／匯出與清除</a></nav>
+<section class="entry-panel" id="turn-overview"><h2>TURN 伺服器 A～G</h2><div id="server-lamps" class="server-lamps"></div><p id="pool-status" role="status"></p><button id="pool-refresh" class="secondary">更新伺服器用量</button><p class="hint">灰：未設定／停用；綠：低於50%；黃：50～95%；紅：超過95%；藍：用量未知／未設額度。黑框代表至少一個頻道目前選用。Metered 約每分鐘更新一次；同帳號的不同憑證共用額度。</p></section>
+<nav class="record-actions"><button class="secondary" data-admin-view="management">房間管理</button><button class="secondary" data-admin-view="servers">伺服器設定</button><button class="secondary" data-admin-view="devices">登入裝置紀錄</button><a class="secondary" id="records-link" href="records.html">記錄搜尋／匯出與清除</a><a class="secondary" id="permissions-link" href="permissions.html">管理員權限</a></nav>
 <div id="management-view">
 <p class="hint">更改任一房間密碼會撤銷該房全部登入，包括廣播控制台與工作站。正常連線裝置會在下次同步時退出；員工須使用新密碼重新加入。</p>
 <div id="admin-rooms" class="admin-grid"></div>

@@ -1,3 +1,4 @@
+import {getAccess,canAccess} from './access-core.js?v=2.5.0';
 import {channelLabel} from './core.js?v=2.1.2';
 import {CONFIG} from './config.js';
 import {keywordsFrom,recordsCsv,responseText} from './records-core.js?v=2.4.0';
@@ -10,7 +11,7 @@ async function api(action,payload={}){
  if(error)throw error;if(!data?.ok)throw new Error(data?.error||'操作失敗');return data;
 }
 async function load(){
- const data=await api('list');$('admin-login').hidden=true;$('admin-panel').hidden=false;
+ const data=await getAccess(client);if(!canAccess(data.permissions,'records.view'))throw Error('此帳號沒有記錄頁面的權限');$('delete-section').hidden=!canAccess(data.permissions,'records.delete');$('export-button').hidden=!canAccess(data.permissions,'records.export');$('admin-login').hidden=true;$('admin-panel').hidden=false;
  for(const id of ['search-room','delete-room']){const select=$(id),value=select.value;select.replaceChildren(new Option(id==='search-room'?'全部房間':'請選擇一個房間',''));for(const room of data.rooms)select.add(new Option(room.title+' ('+channelLabel(room.code)+')',room.code));select.value=value;}
 }
 $('admin-login-form').addEventListener('submit',async e=>{
@@ -93,3 +94,4 @@ $('delete-confirm').addEventListener('click',async()=>{
  }catch(e){invalidatePreview();$('delete-status').textContent=e.message;}finally{lockRecords(false);}
 });
 client.auth.getSession().then(({data})=>{if(data.session)load().catch(e=>status(e.message));});
+

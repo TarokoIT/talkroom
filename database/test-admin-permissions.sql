@@ -1,0 +1,42 @@
+-- Fixtures and grants are rolled back. Run after admin-permissions.sql.
+BEGIN;
+DO $$ DECLARE owner_id uuid; reader_id uuid:=gen_random_uuid(); r jsonb; rev bigint; denied boolean;
+BEGIN
+ SELECT id INTO owner_id FROM auth.users WHERE lower(email)='urza@silksplace-taroko.com.tw' AND email_confirmed_at IS NOT NULL;
+ ASSERT owner_id IS NOT NULL;
+ INSERT INTO auth.users(id,email,email_confirmed_at,is_anonymous) VALUES(reader_id,'permissions-qa@example.invalid',now(),false);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'role','authenticated')::text,true);
+ PERFORM public.talkroom_access('save','{"email":"permissions-qa@example.invalid","enabled":true,"permissions":["records.view"]}');
+ BEGIN PERFORM public.talkroom_access('save','{"email":"urza@silksplace-taroko.com.tw","enabled":false,"permissions":[],"revision":1}');RAISE EXCEPTION 'owner not protected';EXCEPTION WHEN raise_exception THEN IF SQLERRM='owner not protected' THEN RAISE; END IF; END;
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',reader_id,'role','authenticated')::text,true);
+ r:=public.talkroom_access('self');ASSERT r->'permissions'='["records.view"]'::jsonb;
+ PERFORM public.talkroom_records('search','{"keywords":["permissions-qa-does-not-exist"]}');
+ BEGIN PERFORM public.talkroom_records('export','{}');RAISE EXCEPTION 'export allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_records('delete_preview','{}');RAISE EXCEPTION 'delete allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_records('delete_confirm','{}');RAISE EXCEPTION 'confirm allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_admin('update','{}');RAISE EXCEPTION 'room edit allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_admin('revoke','{}');RAISE EXCEPTION 'revoke allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_turn_manage('list');RAISE EXCEPTION 'server view allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_turn_manage('save','{}');RAISE EXCEPTION 'server edit allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_turn_authorize(NULL);RAISE EXCEPTION 'admin TURN allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_device_logs('{}');RAISE EXCEPTION 'device data allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_access('list');RAISE EXCEPTION 'permission list allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN PERFORM public.talkroom_access('save','{}');RAISE EXCEPTION 'permission edit allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'role','authenticated')::text,true);
+ SELECT revision INTO rev FROM talkroom_private.admin_emails WHERE email='permissions-qa@example.invalid';
+ PERFORM public.talkroom_access('save',jsonb_build_object('email','permissions-qa@example.invalid','revision',rev,'permissions',ARRAY['records.view','records.export','devices.view']));
+ BEGIN PERFORM public.talkroom_access('save',jsonb_build_object('email','permissions-qa@example.invalid','revision',rev,'permissions',ARRAY['records.view']));RAISE EXCEPTION 'stale update allowed';EXCEPTION WHEN raise_exception THEN IF SQLERRM='stale update allowed' THEN RAISE; END IF; END;
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',reader_id,'role','authenticated')::text,true);
+ PERFORM public.talkroom_records('export','{"keywords":["permissions-qa-does-not-exist"]}');
+ PERFORM public.talkroom_device_logs('{}');
+ BEGIN PERFORM public.talkroom_device_logs('{"action":"export"}');RAISE EXCEPTION 'device export allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'role','authenticated')::text,true);
+ UPDATE talkroom_private.admin_emails SET enabled=false WHERE email='permissions-qa@example.invalid';
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',reader_id,'role','authenticated')::text,true);
+ BEGIN PERFORM public.talkroom_records('search','{}');RAISE EXCEPTION 'disabled caller allowed';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ ASSERT NOT has_function_privilege('anon','public.talkroom_access(text,jsonb)','EXECUTE');
+ ASSERT NOT has_table_privilege('authenticated','talkroom_private.admin_emails','UPDATE');
+ ASSERT NOT has_function_privilege('authenticated','talkroom_private.require_access(text)','EXECUTE');
+END $$;
+ROLLBACK;
+
